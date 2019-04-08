@@ -1,6 +1,4 @@
 import sys
-import os
-import fileinput
 import sqlite3
 import readline
 from random import randrange
@@ -12,6 +10,7 @@ YELLOW = '\033[33m'
 PURPLE = '\033[95m'
 RESET = '\033[0m'
 
+
 def color(num):
     if num > 50:
         return GREEN
@@ -19,17 +18,18 @@ def color(num):
         return YELLOW
     return RED
 
+
 class Dungeon:
     """
     """
 
     dungeon_map = "dungeon.map"
     prompt = '> '
-    attack = 5 # base attack "punch"
-    health = 100 # base player health
-    items = [] # base player inventory
+    attack = 5  # base attack "punch"
+    health = 100  # base player health
+    items = []  # base player inventory
     user = input("username: ")
-    #password = input("password: ")
+    # password = input("password: ")
     # todo: authenticate users with table of passwords
 
     """
@@ -38,7 +38,6 @@ class Dungeon:
     - super user has elevated permissions to modify the world but can't interact/fight mobs
     """
     def repl(self):
-        cmd = ''
         self.db = sqlite3.connect(self.dungeon_map)
         self.c = self.db.cursor()
         self.current_room = self.getEntranceOrCreateDatabase()
@@ -89,7 +88,7 @@ class Dungeon:
                     continue
                 self.c.execute("SELECT to_room FROM exits WHERE from_room = {} AND dir='{}'".format(self.current_room, words[1]))
                 new_room_p = self.c.fetchone()
-                if (new_room_p == None):
+                if new_room_p is None:
                     print("You can't go that way")
                     continue
                 else:
@@ -151,6 +150,7 @@ class Dungeon:
                 y = int(input("Pick room id to teleport to: "))
                 if y in x:
                     self.current_room = y
+                    print("You teleported!")
                     self.doLook()
                 else:
                     print("Not a valid id")
@@ -165,19 +165,20 @@ class Dungeon:
                     name = input("Pick an item to inspect: ")
                     self.c.execute("SELECT * FROM loot WHERE name='{}'".format(name))
                     item = self.c.fetchone()
-                    if item != None:
+                    if item is not None:
                         print(item[1] +": "+ item[3] + ", damage: " + str(item[2]))
                 else: # inspect any item in the room
                     self.c.execute("SELECT * FROM item WHERE room_id='{}'".format(self.current_room))
                     item = self.c.fetchone()
-                    if item != None:
+                    if item is not None:
                         print(item[1] +": "+ item[3] + ", damage: " + str(item[2]))
                 continue
+
             elif words[0] == 'vanish':
                 if not self.super:
                     print("must be super user to do that try: \'super\'")
                     continue
-                query = "DELETE FROM mobs WHERE room_id={}".format(self.current_room)
+                query = "DELETE FROM mobs WHERE room_id={}".format(self.current_room) # deletes all mobs in current room
                 self.c.execute(query)
 
             elif words[0] == 'spawn':
@@ -188,7 +189,7 @@ class Dungeon:
                     print("usage: spawn <name> <health> <loot>")
                     continue
                 self.c.execute('SELECT name FROM loot WHERE name = "{}"'.format(words[3]))
-                if (self.c.fetchall() == None):
+                if (self.c.fetchall() is None):
                     print("that isn't valid loot, try adding it with \'loot {}...\'".format(words[3]))
                     continue
                 query = 'INSERT INTO mobs (desc, health, loot, room_id) VALUES ("{}", {}, "{}", {})'.format(words[1].strip(), int(words[2]), words[3], self.current_room)
@@ -255,14 +256,15 @@ class Dungeon:
                     for x in item:
                         if words[1] == x[1]:
                             self.items.append(x[1])
-                            self.attack = max(self.attack,x[2])
+                            if x[2] > self.attack:
+                                self.attack = x[2]
+                                print("Your attack is now {}".format(self.attack))
                             self.c.execute('INSERT INTO inventory (player, name) VALUES ("{}","{}")'.format(self.user, x[1]))
-                            print("Your attack is now {}".format(self.attack))
                             self.c.execute('DELETE FROM item WHERE room_id={} AND name="{}"'.format(self.current_room, x[1]))
                             break
 
             elif words[0] == 'help':
-                print( RED + "new, dig, super, normal, place, spawn, loot, vanish, tele" + RESET + " look, go, inspect, attack, steal, stats, items, take, help")
+                print( RED + "new, dig, normal, place, spawn, loot, vanish, tele" + RESET + " super, look, go, inspect, attack, steal, stats, items, take, help")
                 continue
 
             else:
@@ -271,12 +273,12 @@ class Dungeon:
 
             self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
             mob = self.c.fetchone() # todo: have multiple mobs at once
-            if not self.super and mob != None:
+            if not self.super and mob is not None:
                 self.c.execute('SELECT damage FROM loot WHERE name = "{}"'.format(mob[3]))
                 damage = self.c.fetchone()[0]
                 print(mob[1] + " attacked you! You lost " + str(damage)+ " health")
                 self.health -= damage
-            self.db.commit()
+            self.db.commit() # here?
 
         # all done, clean exit
         print("bye!")
@@ -284,7 +286,6 @@ class Dungeon:
 
     # helper function to place an item in current room
     def place(self,name):
-        room = self.current_room
         self.c.execute("SELECT * FROM loot WHERE name='{}'".format(name))
         item = self.c.fetchone()
         self.c.execute('INSERT INTO item (name, damage, desc, room_id) VALUES ("{}",{},"{}",{})'.format(name,item[2],item[3],self.current_room))
@@ -316,13 +317,17 @@ class Dungeon:
         for exit in self.c.fetchall():
             print("{}  ".format(exit[0]), end='')
         print("")
+
+    def authenticate(self,username,password):
+        print("Todo")
+
     # handle startup
     def getEntranceOrCreateDatabase(self):
         # check if we've initialized the database before
         # does it have a "rooms" table
         self.c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='rooms'")
         db_exists = self.c.fetchone()
-        if (db_exists == None):
+        if (db_exists is None):
             self.c.execute("DROP TABLE if exists rooms")
             self.c.execute("DROP TABLE if exists mobs")
             self.c.execute("DROP TABLE if exists loot")
