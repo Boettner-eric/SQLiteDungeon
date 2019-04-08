@@ -1,0 +1,17 @@
+bot
+super *
+loot sword 10 | A sharp blade
+loot dagger 5 | A small blade
+loot torch 1 | ...
+loot spear 15 | Sharp
+place spear
+dig east west | A small room | Pretty Normal
+go east
+place torch
+spawn wizard 20 sword
+dig north south | A large dinning hall | Sadly without food
+go north
+spawn knight 25 spear
+go south
+go west
+exit
