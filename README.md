@@ -27,6 +27,7 @@ Super User:
 -
 
 On the way:
+- Impelement room persistance for users
 - User authentication using sql
 - Multiplayer support (chat, interactions, fights?)
 - Better stats (defense, chance, magic...)
