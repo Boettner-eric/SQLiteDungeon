@@ -214,7 +214,7 @@ class Dungeon:
                 self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
                 mob = self.c.fetchone()
                 if randrange(100) < 80: # todo: more player/mob stats
-                    if mob[2] < self.attack:
+                    if mob[2] <= self.attack:
                         self.c.execute("DELETE FROM mobs WHERE room_id={}".format(self.current_room))
                         print("You killed {}!".format(mob[1]))
                         print("It dropped a {}".format(mob[3]))
