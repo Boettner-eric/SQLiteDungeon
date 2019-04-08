@@ -18,7 +18,6 @@ dig east west | The Armory | Stock full of weapons
 go east
 place lance
 spawn knight 40 axe
-go west
-go south
-go west
+tele
+1
 exit
