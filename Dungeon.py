@@ -58,14 +58,13 @@ class Dungeon:
             elif words[0] == 'look':
                 self.doLook()
 
-            elif words[0] == 'go':
+            elif words[0] == 'go' or words[0] in DIRECTIONS:
                 # move to an adjacent room.
-                # todo - allow someone to type the direction of an
-                # adjacent room without "go"
-                if len(words) < 2:
+                if len(words) < 2 and words[0] not in DIRECTIONS:
                     print("usage: go <direction>")
                     continue
-                self.c.execute("SELECT to_room FROM exits WHERE from_room = {} AND dir='{}'".format(self.current_room, words[1]))
+                dir = words[0] if words[0] in DIRECTIONS else words[1]
+                self.c.execute("SELECT to_room FROM exits WHERE from_room = {} AND dir='{}'".format(self.current_room, dir))
                 new_room_p = self.c.fetchone()
                 if new_room_p is None:
                     print("You can't go that way")

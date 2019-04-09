@@ -11,19 +11,19 @@ loot knife 3 | Useful for chopping
 place spear
 dig east west | A small room | Pretty Normal
 dig up down | The Kitchen | It smells pretty good...
-go east
+east
 place torch
 spawn wizard 20 sword
 dig north south | A large dinning hall | Sadly empty of food
-go north
+north
 spawn knight 25 spear
 dig east west | The Armory | Stock full of weapons
-go east
+east
 place lance
 spawn knight 40 axe
 tele
 1
-go up
+up
 spawn chef 10 knife
 tele
 1
