@@ -2,6 +2,7 @@ import sys
 import sqlite3
 import readline
 from random import randrange
+from base64 import b64encode
 
 GREEN = '\033[32m'
 RED = '\033[91m'
@@ -278,9 +279,6 @@ class Dungeon:
                 self.health -= damage
             self.db.commit()
 
-        # all done, clean exit
-        print("bye!")
-
     # helper function to place an item in current room
     def place(self,name):
         self.c.execute("SELECT * FROM loot WHERE name='{}'".format(name))
@@ -339,19 +337,19 @@ class Dungeon:
 
     def newuser(self):
         psw = input("create a password for '{}': ".format(self.user))
-        self.prompt = '> '
-        self.super = False
+        self.prompt = self.user + ' > '
+        self.super = False # base user is normal not super
         self.attack = 5  # base attack "punch"
         self.health = 100  # base player health
-        self.items = []  # base player inventory
+        self.items = []  # base player inventory is empty
         self.c.execute("SELECT MIN(id) FROM rooms")
         self.current_room = self.c.fetchone()[0]
-        self.c.execute('INSERT INTO user (username, password, health, room_id, super, status) VALUES ("{}","{}",{},{},{},"{}")'.format(self.user,psw,self.health,1,int(self.super),"online"))
+        self.c.execute('INSERT INTO user (username, password, health, room_id, super, status) VALUES ("{}","{}",{},{},{},"{}")'.format(self.user,b64encode(psw.encode("utf-8")),self.health,1,int(self.super),"online"))
         self.db.commit()
 
     def authenticate(self):
         psw = input("password: ")
-        self.c.execute('SELECT * FROM user WHERE username="{}" AND password="{}"'.format(self.user,psw))
+        self.c.execute('SELECT * FROM user WHERE username="{}" AND password="{}"'.format(self.user,b64encode(psw.encode("utf-8"))))
         correct = self.c.fetchone()
         if correct is None or len(correct) < 4:
             print("Incorrect password for user")
@@ -383,8 +381,6 @@ class Dungeon:
 
     # handle startup
     def CreateDatabase(self):
-        # check if we've initialized the database before
-        # does it have a "rooms" table
         self.c.execute("CREATE TABLE rooms (id INTEGER PRIMARY KEY AUTOINCREMENT, short_desc TEXT, florid_desc TEXT)")
         self.c.execute("CREATE TABLE mobs (id INTEGER PRIMARY KEY AUTOINCREMENT, desc TEXT, health INTEGER, loot TEXT, room_id INTEGER)")
         self.c.execute("CREATE TABLE loot (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, damage INTEGER, desc TEXT)")
@@ -394,8 +390,6 @@ class Dungeon:
         self.c.execute("CREATE TABLE user (username TEXT, password TEXT, health INTEGER, room_id INTEGER, super INTEGER, status TEXT)")
         self.c.execute("INSERT INTO rooms (florid_desc, short_desc) VALUES ('You are standing at the entrance of what appears to be a vast, complex cave.', 'entrance')")
         self.db.commit()
-        # now we know the db exists - fetch the first room, which is
-        # the entrance
 
 assert sys.version_info >= (3,0), "This program requires Python 3"
 
