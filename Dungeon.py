@@ -126,13 +126,14 @@ class Dungeon:
                 if not self.super:
                     print("must be super user to do that try: \'super\'")
                     continue
+                if len(words) < 2:
+                    print("need a room id")
+                    continue
                 self.c.execute('SELECT id FROM rooms')
                 x = [row[0] for row in self.c.fetchall()]
-                print(x)
-                y = int(input("Pick room id to teleport to: "))
-                if y in x:
-                    self.current_room = y
-                    print("You teleported!")
+                if int(words[1]) in x:
+                    self.current_room = int(words[1])
+                    print(BLUE + "You teleported!" + RESET)
                     self.doLook()
                 else:
                     print("Not a valid id")
