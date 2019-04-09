@@ -206,6 +206,7 @@ class Dungeon:
                     else:
                         damage = mob[2] - self.attack
                         self.c.execute("UPDATE mobs SET health={} WHERE room_id={}".format(damage,self.current_room))
+                        self.db.commit()
                         print("You did {} damage to {}. {} has {} health left".format(self.attack, mob[1], mob[1],mob[2]-self.attack))
                 else:
                     print("{} dodged your attack!!".format(mob[1]))
