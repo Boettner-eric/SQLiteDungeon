@@ -2,6 +2,7 @@ import sys
 import sqlite3
 import readline
 from random import randrange
+from base64 import b64encode
 
 GREEN = '\033[32m'
 RED = '\033[91m'
@@ -57,14 +58,13 @@ class Dungeon:
             elif words[0] == 'look':
                 self.doLook()
 
-            elif words[0] == 'go':
+            elif words[0] == 'go' or words[0] in DIRECTIONS:
                 # move to an adjacent room.
-                # todo - allow someone to type the direction of an
-                # adjacent room without "go"
-                if len(words) < 2:
+                if len(words) < 2 and words[0] not in DIRECTIONS:
                     print("usage: go <direction>")
                     continue
-                self.c.execute("SELECT to_room FROM exits WHERE from_room = {} AND dir='{}'".format(self.current_room, words[1]))
+                dir = words[0] if words[0] in DIRECTIONS else words[1]
+                self.c.execute("SELECT to_room FROM exits WHERE from_room = {} AND dir='{}'".format(self.current_room, dir))
                 new_room_p = self.c.fetchone()
                 if new_room_p is None:
                     print("You can't go that way")
@@ -125,17 +125,28 @@ class Dungeon:
                 if not self.super:
                     print("must be super user to do that try: \'super\'")
                     continue
+                if len(words) < 2:
+                    print("need a room id")
+                    continue
                 self.c.execute('SELECT id FROM rooms')
                 x = [row[0] for row in self.c.fetchall()]
-                print(x)
-                y = int(input("Pick room id to teleport to: "))
-                if y in x:
-                    self.current_room = y
-                    print("You teleported!")
+                if int(words[1]) in x:
+                    self.current_room = int(words[1])
+                    print(BLUE + "You teleported!" + RESET)
                     self.doLook()
                 else:
                     print("Not a valid id")
                     continue
+
+            elif words[0] == 'map':
+                if not self.super:
+                    print("must be super user to do that try: \'super\'")
+                    continue
+                self.c.execute('SELECT * FROM rooms')
+                x = self.c.fetchall()
+                print("id| Description | Long Description | Users? | Loot")
+                for i in x:
+                    print("{} | {} | {}".format(i[0],i[1], i[2]))
 
             elif words[0] == 'inspect':
                 if self.super: # inspect any item
@@ -278,9 +289,6 @@ class Dungeon:
                 self.health -= damage
             self.db.commit()
 
-        # all done, clean exit
-        print("bye!")
-
     # helper function to place an item in current room
     def place(self,name):
         self.c.execute("SELECT * FROM loot WHERE name='{}'".format(name))
@@ -339,23 +347,24 @@ class Dungeon:
 
     def newuser(self):
         psw = input("create a password for '{}': ".format(self.user))
-        self.prompt = '> '
-        self.super = False
+        self.prompt = self.user + ' > '
+        self.super = False # base user is normal not super
         self.attack = 5  # base attack "punch"
         self.health = 100  # base player health
-        self.items = []  # base player inventory
+        self.items = []  # base player inventory is empty
         self.c.execute("SELECT MIN(id) FROM rooms")
         self.current_room = self.c.fetchone()[0]
-        self.c.execute('INSERT INTO user (username, password, health, room_id, super, status) VALUES ("{}","{}",{},{},{},"{}")'.format(self.user,psw,self.health,1,int(self.super),"online"))
+        self.c.execute('INSERT INTO user (username, password, health, room_id, super, status) VALUES ("{}","{}",{},{},{},"{}")'.format(self.user,b64encode(psw.encode("utf-8")),self.health,1,int(self.super),"online"))
         self.db.commit()
 
     def authenticate(self):
         psw = input("password: ")
-        self.c.execute('SELECT * FROM user WHERE username="{}" AND password="{}"'.format(self.user,psw))
+        self.c.execute('SELECT * FROM user WHERE username="{}" AND password="{}"'.format(self.user,b64encode(psw.encode("utf-8"))))
         correct = self.c.fetchone()
         if correct is None or len(correct) < 4:
             print("Incorrect password for user")
             self.login()
+            return None
         if correct[4] == 1:
             self.prompt =  RED + self.user + " ! "+RESET
             self.super = True
@@ -383,8 +392,6 @@ class Dungeon:
 
     # handle startup
     def CreateDatabase(self):
-        # check if we've initialized the database before
-        # does it have a "rooms" table
         self.c.execute("CREATE TABLE rooms (id INTEGER PRIMARY KEY AUTOINCREMENT, short_desc TEXT, florid_desc TEXT)")
         self.c.execute("CREATE TABLE mobs (id INTEGER PRIMARY KEY AUTOINCREMENT, desc TEXT, health INTEGER, loot TEXT, room_id INTEGER)")
         self.c.execute("CREATE TABLE loot (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, damage INTEGER, desc TEXT)")
@@ -394,8 +401,6 @@ class Dungeon:
         self.c.execute("CREATE TABLE user (username TEXT, password TEXT, health INTEGER, room_id INTEGER, super INTEGER, status TEXT)")
         self.c.execute("INSERT INTO rooms (florid_desc, short_desc) VALUES ('You are standing at the entrance of what appears to be a vast, complex cave.', 'entrance')")
         self.db.commit()
-        # now we know the db exists - fetch the first room, which is
-        # the entrance
 
 assert sys.version_info >= (3,0), "This program requires Python 3"
 

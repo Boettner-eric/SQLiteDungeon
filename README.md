@@ -12,7 +12,7 @@ Features:
 
 Setup:
 ```
-python3 Dungeon.py < setup.txt
+p3 dungeon.py < setup.txt > /dev/null
 ```
 - Modify setup.txt to change layout of a generated map
 - Use super user to make changes to an existing map
