@@ -1,4 +1,5 @@
 bot
+*
 super *
 loot sword 10 | A sharp blade
 loot dagger 5 | A small blade
