@@ -227,10 +227,11 @@ class Dungeon:
                     print("must be super user to do that try: \'super\'")
                     continue
                 self.c.execute('SELECT * FROM user')
-                super = lambda y,x : RED + x + RESET if y else x
+                super = lambda y,x: RED + x + RESET if bool(y) else x
+                online = lambda y: GREEN + y + RESET if 'online' in y else y
                 print("name     | hp  | room | status  |")
                 for i in self.c.fetchall():
-                    print(super(i[3],'{0: <8}'.format(i[0])) + " | " + str(i[2]) + " | " + '{0: <4}'.format(i[4]) + " | " + '{0: <7}'.format(i[5]) + " |") # fix formatting here for names
+                    print(super(i[4],'{0: <8}'.format(i[0])) + " | " + str(i[2]) + " | " + '{0: <4}'.format(i[3]) + " | " + online('{0: <7}'.format(i[5])) + " |") # fix formatting here for names
 
             elif words[0] == 'steal':
                 chance = randrange(100)
