@@ -12,7 +12,7 @@ PURPLE = '\033[95m'
 RESET = '\033[0m'
 
 DIRECTIONS = ['east', 'west', 'north', 'south', 'up', 'down']
-
+SUPER_COMMANDS = ['loot','spawn','vanish','dig','place','tele','map']
 
 def color(num):
     if num > 50:
@@ -50,14 +50,9 @@ class Dungeon:
                 self.saveuser()
                 break
 
-            # destroy the dungeon and start over
-            # maybe we should ask "are you sure?"
-            elif words[0] in ('new'):
-                if not self.super:
-                    print("must be super user to do that try: \'super\'")
-                    continue
-                self.c.execute("DROP TABLE rooms")
-                self.current_room = self.getEntranceOrCreateDatabase()
+            elif words[0] in SUPER_COMMANDS and not self.super:
+                print("must be super user to do that try: \'super\'")
+                continue
 
             elif words[0] == 'look':
                 self.doLook()
@@ -79,9 +74,6 @@ class Dungeon:
 
             elif words[0] == 'dig':
                 # Only super users can create new rooms
-                if not self.super:
-                    print("must be super user to do that try: \'super\'")
-                    continue
                 descs = line.split("|")
                 words = descs[0].split()
                 if len(words) < 3 or len(descs) != 3:
@@ -116,19 +108,14 @@ class Dungeon:
             elif words[0] == 'normal':
                 self.prompt = self.user + " > "
                 self.super = False
+                continue
 
             elif words[0] == 'place':
-                if not self.super:
-                    print("must be super user to do that try: \'super\'")
-                    continue
                 if len(words) < 2:
                     print("usage: place <loot>")
                 self.place(words[1])
 
             elif words[0] == 'tele':
-                if not self.super:
-                    print("must be super user to do that try: \'super\'")
-                    continue
                 if len(words) < 2:
                     print("usage: tele <room_id>")
                     continue
@@ -143,9 +130,6 @@ class Dungeon:
                     continue
 
             elif words[0] == 'map':
-                if not self.super:
-                    print("must be super user to do that try: \'super\'")
-                    continue
                 self.c.execute('SELECT * FROM rooms')
                 x = self.c.fetchall()
                 print("id| Description | Long Description | Users? | Loot")
@@ -174,16 +158,10 @@ class Dungeon:
                 continue
 
             elif words[0] == 'vanish':
-                if not self.super:
-                    print("must be super user to do that try: \'super\'")
-                    continue
                 query = "DELETE FROM mobs WHERE room_id={}".format(self.current_room) # deletes all mobs in current room
                 self.c.execute(query)
 
             elif words[0] == 'spawn':
-                if not self.super:
-                    print("must be super user to do that try: \'super\'")
-                    continue
                 if len(words) < 4:
                     print("usage: spawn <name> <health> <loot>")
                     continue
@@ -195,9 +173,6 @@ class Dungeon:
                 self.c.execute(query)
 
             elif words[0] == 'loot':
-                if not self.super:
-                    print("must be super user to do that try: \'super\'")
-                    continue
                 if len(words) < 3:
                     print("usage: loot <name> <damage> | <description of item> OR loot list")
                     continue
@@ -207,9 +182,6 @@ class Dungeon:
                 self.c.execute(query)
 
             elif words[0] == 'attack':
-                if self.super:
-                    print("must be normal user to do that try: \'normal\'")
-                    continue
                 self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
                 mob = self.c.fetchone()
                 if randrange(100) < 80: # todo: more player/mob stats
@@ -236,8 +208,6 @@ class Dungeon:
                         print(super(i[4],'{0: <8}'.format(i[0])) + " | " + color(i[2])+ '{0: <5}'.format(i[2]) + RESET + " | " + '{0: <4}'.format(i[3]) + " | " + online('{0: <7}'.format(i[5])) + " |") # fix formatting here for names
                     else:
                         print(super(i[4],'{0: <8}'.format(i[0]))+ " | " + online('{0: <7}'.format(i[5])) + " |") # fix formatting here for names
-
-
 
             elif words[0] == 'steal':
                 chance = randrange(100)
