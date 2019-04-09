@@ -61,7 +61,7 @@ class Dungeon:
             elif words[0] == 'go' or words[0] in DIRECTIONS:
                 # move to an adjacent room.
                 if len(words) < 2 and words[0] not in DIRECTIONS:
-                    print("usage: go <direction>")
+                    print("usage: go <direction> | <direction>")
                     continue
                 dir = words[0] if words[0] in DIRECTIONS else words[1]
                 self.c.execute("SELECT to_room FROM exits WHERE from_room = {} AND dir='{}'".format(self.current_room, dir))
@@ -227,10 +227,10 @@ class Dungeon:
                     print("must be super user to do that try: \'super\'")
                     continue
                 self.c.execute('SELECT * FROM user')
-                super = lambda x : "super" if x else "normal"
-                print("name     | hp  | super | room | status  |")
+                super = lambda y,x : RED + x + RESET if y else x
+                print("name     | hp  | room | status  |")
                 for i in self.c.fetchall():
-                    print('{0: <8}'.format(i[0]) + " | " + str(i[2]) + " | " + super(i[3])+ " | " + '{0: <4}'.format(i[4]) + " | " + '{0: <7}'.format(i[5]) + " |")
+                    print(super(i[3],'{0: <8}'.format(i[0])) + " | " + str(i[2]) + " | " + '{0: <4}'.format(i[4]) + " | " + '{0: <7}'.format(i[5]) + " |") # fix formatting here for names
 
             elif words[0] == 'steal':
                 chance = randrange(100)
