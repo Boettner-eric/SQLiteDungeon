@@ -335,6 +335,7 @@ class Dungeon:
             self.c.execute(query)
             query = 'INSERT INTO exits (from_room, to_room, dir) VALUES ({}, {}, "{}")'.format(new_room_id, self.current_room, reverse)
             self.c.execute(query)
+            self.db.commit()
 
         elif words[0] == 'place':
             if len(words) < 2:
@@ -376,6 +377,7 @@ class Dungeon:
                 return
             query = 'INSERT INTO mobs (desc, health, loot, room_id) VALUES ("{}", {}, "{}", {})'.format(words[1].strip(), int(words[2]), words[3], self.current_room)
             self.c.execute(query)
+            self.db.commit()
 
         elif words[0] == 'loot':
             if len(words) < 3:
