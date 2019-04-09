@@ -216,8 +216,10 @@ class Dungeon:
                     print("must be super user to do that try: \'super\'")
                     continue
                 self.c.execute('SELECT * FROM user')
+                super = lambda x : "super" if x else "normal"
+                print("name     | hp  | super | room | status  |")
                 for i in self.c.fetchall():
-                    print(i)
+                    print('{0: <8}'.format(i[0]) + " | " + str(i[2]) + " | " + super(i[3])+ " | " + '{0: <4}'.format(i[4]) + " | " + '{0: <7}'.format(i[5]) + " |")
 
             elif words[0] == 'steal':
                 chance = randrange(100)
@@ -324,6 +326,7 @@ class Dungeon:
             self.c.execute("DROP TABLE if exists loot")
             self.c.execute("DROP TABLE if exists exits")
             self.c.execute("DROP TABLE if exists inventory")
+            self.CreateDatabase()
             self.user = input("username: ")
             self.newuser()
             return None
@@ -335,21 +338,22 @@ class Dungeon:
             self.authenticate()
 
     def newuser(self):
-        psw = input("enter a password for '{}': ".format(self.user))
+        psw = input("create a password for '{}': ".format(self.user))
         self.prompt = '> '
         self.super = False
         self.attack = 5  # base attack "punch"
         self.health = 100  # base player health
         self.items = []  # base player inventory
-        self.current_room = self.getEntranceOrCreateDatabase()
-        self.c.execute('INSERT INTO user (username, password, health, room_id, super) VALUES ("{}","{}",{},{},{})'.format(self.user,psw,self.health,1,int(self.super)))
+        self.c.execute("SELECT MIN(id) FROM rooms")
+        self.current_room = self.c.fetchone()[0]
+        self.c.execute('INSERT INTO user (username, password, health, room_id, super, status) VALUES ("{}","{}",{},{},{},"{}")'.format(self.user,psw,self.health,1,int(self.super),"online"))
         self.db.commit()
 
     def authenticate(self):
         psw = input("password: ")
         self.c.execute('SELECT * FROM user WHERE username="{}" AND password="{}"'.format(self.user,psw))
         correct = self.c.fetchone()
-        if correct is [] or correct is None:
+        if correct is None or len(correct) < 4:
             print("Incorrect password for user")
             self.login()
         if correct[4] == 1:
@@ -368,15 +372,17 @@ class Dungeon:
             self.c.execute('SELECT damage FROM loot WHERE name="{}"'.format(item[0]))
             damage = self.c.fetchone()
             self.attack = max(self.attack,damage[0]) # updates attack value to best item
+        self.c.execute('UPDATE user SET status="online" WHERE username="{}"'.format(self.user))
+        self.db.commit()
 
     def saveuser(self):
-        self.c.execute('UPDATE user SET health={}, super={}, room_id={} WHERE username="{}"'.format(self.health,int(self.super),self.current_room,self.user)) # isn't working rn
+        self.c.execute('UPDATE user SET health={}, super={}, room_id={}, status="offline" WHERE username="{}"'.format(self.health,int(self.super),self.current_room,self.user)) # isn't working rn
         self.db.commit()
         print("Saved")
         self.db.close()
 
     # handle startup
-    def getEntranceOrCreateDatabase(self):
+    def CreateDatabase(self):
         # check if we've initialized the database before
         # does it have a "rooms" table
         self.c.execute("CREATE TABLE rooms (id INTEGER PRIMARY KEY AUTOINCREMENT, short_desc TEXT, florid_desc TEXT)")
@@ -385,14 +391,11 @@ class Dungeon:
         self.c.execute("CREATE TABLE item (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, damage INTEGER, desc TEXT, room_id INTEGER)")
         self.c.execute("CREATE TABLE inventory (name TEXT, player TEXT)") ## add to all instances
         self.c.execute("CREATE TABLE exits (from_room INTEGER, to_room INTEGER, dir TEXT)")
-        self.c.execute("CREATE TABLE user (username TEXT, password TEXT, health INTEGER, room_id INTEGER, super INTEGER)")
+        self.c.execute("CREATE TABLE user (username TEXT, password TEXT, health INTEGER, room_id INTEGER, super INTEGER, status TEXT)")
         self.c.execute("INSERT INTO rooms (florid_desc, short_desc) VALUES ('You are standing at the entrance of what appears to be a vast, complex cave.', 'entrance')")
         self.db.commit()
         # now we know the db exists - fetch the first room, which is
         # the entrance
-        self.c.execute("SELECT MIN(id) FROM rooms")
-        entrance_p = self.c.fetchone()
-        return entrance_p[0]
 
 assert sys.version_info >= (3,0), "This program requires Python 3"
 
