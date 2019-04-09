@@ -50,8 +50,11 @@ class Dungeon:
                 self.saveuser()
                 break
 
-            elif words[0] in SUPER_COMMANDS and not self.super:
-                print("must be super user to do that try: \'super\'")
+            elif words[0] in SUPER_COMMANDS:
+                if self.super:
+                    self.super_com(words)
+                else:
+                    print("must be super user to do that try: \'super\'")
                 continue
 
             elif words[0] == 'look':
@@ -72,31 +75,6 @@ class Dungeon:
                     self.current_room = new_room_p[0]
                     self.doLook()
 
-            elif words[0] == 'dig':
-                # Only super users can create new rooms
-                descs = line.split("|")
-                words = descs[0].split()
-                if len(words) < 3 or len(descs) != 3:
-                    print("usage: dig <direction> <reverse> | <name> | <description>")
-                    continue
-                forward = words[1]
-                reverse = words[2]
-                if forward not in DIRECTIONS or reverse not in DIRECTIONS:
-                    print(RED + "Not a valid direction, try " + RESET + str(DIRECTIONS))
-                    continue
-                brief = descs[1].strip()   # strip removes whitespace around |'s
-                florid = descs[2].strip()
-                # now that we have the directions and descriptions,
-                # add the new room, and stitch it in to the dungeon
-                # via its exits
-                query = 'INSERT INTO rooms (short_desc, florid_desc) VALUES ("{}", "{}")'.format(brief, florid)
-                self.c.execute(query)
-                new_room_id = self.c.lastrowid
-                # now add tunnels in both directions
-                query = 'INSERT INTO exits (from_room, to_room, dir) VALUES ({}, {}, "{}")'.format(self.current_room, new_room_id, forward)
-                self.c.execute(query)
-                query = 'INSERT INTO exits (from_room, to_room, dir) VALUES ({}, {}, "{}")'.format(new_room_id, self.current_room, reverse)
-                self.c.execute(query)
 
             elif words[0] == 'super':
                 if len(words) != 1 and words[1] == '*':  # add a password here (must be one string with no spaces)
@@ -109,32 +87,6 @@ class Dungeon:
                 self.prompt = self.user + " > "
                 self.super = False
                 continue
-
-            elif words[0] == 'place':
-                if len(words) < 2:
-                    print("usage: place <loot>")
-                self.place(words[1])
-
-            elif words[0] == 'tele':
-                if len(words) < 2:
-                    print("usage: tele <room_id>")
-                    continue
-                self.c.execute('SELECT id FROM rooms')
-                x = [row[0] for row in self.c.fetchall()]
-                if int(words[1]) in x:
-                    self.current_room = int(words[1])
-                    print(BLUE + "You teleported!" + RESET)
-                    self.doLook()
-                else:
-                    print("Not a valid id")
-                    continue
-
-            elif words[0] == 'map':
-                self.c.execute('SELECT * FROM rooms')
-                x = self.c.fetchall()
-                print("id| Description | Long Description | Users? | Loot")
-                for i in x:
-                    print("{} | {} | {}".format(i[0], i[1], i[2]))
 
             elif words[0] == 'inspect':
                 if self.super:  # inspect any item
@@ -156,30 +108,6 @@ class Dungeon:
                                 if item[1] == words[1]:
                                     print(item[1] + ": " + item[3] + ", damage: " + str(item[2]))
                 continue
-
-            elif words[0] == 'vanish':
-                query = "DELETE FROM mobs WHERE room_id={}".format(self.current_room) # deletes all mobs in current room
-                self.c.execute(query)
-
-            elif words[0] == 'spawn':
-                if len(words) < 4:
-                    print("usage: spawn <name> <health> <loot>")
-                    continue
-                self.c.execute('SELECT name FROM loot WHERE name = "{}"'.format(words[3]))
-                if (self.c.fetchall() is None):
-                    print("that isn't valid loot, try adding it with \'loot {}...\'".format(words[3]))
-                    continue
-                query = 'INSERT INTO mobs (desc, health, loot, room_id) VALUES ("{}", {}, "{}", {})'.format(words[1].strip(), int(words[2]), words[3], self.current_room)
-                self.c.execute(query)
-
-            elif words[0] == 'loot':
-                if len(words) < 3:
-                    print("usage: loot <name> <damage> | <description of item> OR loot list")
-                    continue
-                descs = line.split("|")
-                words = descs[0].split()
-                query = 'INSERT INTO loot (name, damage, desc) VALUES ("{}", {}, "{}")'.format(words[1].strip(), int(words[2]), descs[1].strip())
-                self.c.execute(query)
 
             elif words[0] == 'attack':
                 self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
@@ -379,6 +307,86 @@ class Dungeon:
         self.c.execute("CREATE TABLE user (username TEXT, password TEXT, health INTEGER, room_id INTEGER, super INTEGER, status TEXT)")
         self.c.execute("INSERT INTO rooms (florid_desc, short_desc) VALUES ('You are standing at the entrance of what appears to be a vast, complex cave.', 'entrance')")
         self.db.commit()
+
+    def super_com(self, words):
+        if words[0] == 'dig':
+            # Only super users can create new rooms
+            line = " ".join(words)
+            descs = line.split("|")
+            words = descs[0].split()
+            if len(words) < 3 or len(descs) != 3:
+                print("usage: dig <direction> <reverse> | <name> | <description>")
+                return
+            forward = words[1]
+            reverse = words[2]
+            if forward not in DIRECTIONS or reverse not in DIRECTIONS:
+                print(RED + "Not a valid direction, try " + RESET + str(DIRECTIONS))
+                return
+            brief = descs[1].strip()   # strip removes whitespace around |'s
+            florid = descs[2].strip()
+            # now that we have the directions and descriptions,
+            # add the new room, and stitch it in to the dungeon
+            # via its exits
+            query = 'INSERT INTO rooms (short_desc, florid_desc) VALUES ("{}", "{}")'.format(brief, florid)
+            self.c.execute(query)
+            new_room_id = self.c.lastrowid
+            # now add tunnels in both directions
+            query = 'INSERT INTO exits (from_room, to_room, dir) VALUES ({}, {}, "{}")'.format(self.current_room, new_room_id, forward)
+            self.c.execute(query)
+            query = 'INSERT INTO exits (from_room, to_room, dir) VALUES ({}, {}, "{}")'.format(new_room_id, self.current_room, reverse)
+            self.c.execute(query)
+
+        elif words[0] == 'place':
+            if len(words) < 2:
+                print("usage: place <loot>")
+            self.place(words[1])
+
+        elif words[0] == 'tele':
+            if len(words) < 2:
+                print("usage: tele <room_id>")
+                return
+            self.c.execute('SELECT id FROM rooms')
+            x = [row[0] for row in self.c.fetchall()]
+            if int(words[1]) in x:
+                self.current_room = int(words[1])
+                print(BLUE + "You teleported!" + RESET)
+                self.doLook()
+            else:
+                print("Not a valid id")
+                return
+
+        elif words[0] == 'map':
+            self.c.execute('SELECT * FROM rooms')
+            x = self.c.fetchall()
+            print("id| Description | Long Description | Users? | Loot")
+            for i in x:
+                print("{} | {} | {}".format(i[0], i[1], i[2]))
+
+        elif words[0] == 'vanish':
+            query = "DELETE FROM mobs WHERE room_id={}".format(self.current_room) # deletes all mobs in current room
+            self.c.execute(query)
+
+        elif words[0] == 'spawn':
+            if len(words) < 4:
+                print("usage: spawn <name> <health> <loot>")
+                return
+            self.c.execute('SELECT name FROM loot WHERE name = "{}"'.format(words[3]))
+            if (self.c.fetchall() is None):
+                print("that isn't valid loot, try adding it with \'loot {}...\'".format(words[3]))
+                return
+            query = 'INSERT INTO mobs (desc, health, loot, room_id) VALUES ("{}", {}, "{}", {})'.format(words[1].strip(), int(words[2]), words[3], self.current_room)
+            self.c.execute(query)
+
+        elif words[0] == 'loot':
+            if len(words) < 3:
+                print("usage: loot <name> <damage> | <description of item> OR loot list")
+                return
+            descs = line.split("|")
+            words = descs[0].split()
+            query = 'INSERT INTO loot (name, damage, desc) VALUES ("{}", {}, "{}")'.format(words[1].strip(), int(words[2]), descs[1].strip())
+            self.c.execute(query)
+            self.db.commit()
+
 
 assert sys.version_info >= (3,0), "This program requires Python 3"
 
