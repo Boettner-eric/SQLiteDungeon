@@ -149,10 +149,13 @@ class Dungeon:
                     if item is not None:
                         print(item[1] +": "+ item[3] + ", damage: " + str(item[2]))
                 else: # inspect any item in the room
-                    self.c.execute("SELECT * FROM item WHERE room_id='{}'".format(self.current_room))
-                    item = self.c.fetchone()
-                    if item is not None:
-                        print(item[1] +": "+ item[3] + ", damage: " + str(item[2]))
+                    if len(words) > 1:
+                        self.c.execute("SELECT * FROM item WHERE room_id='{}'".format(self.current_room))
+                        items = self.c.fetchall()
+                        if items is not None:
+                            for item in items:
+                                if item[1] == words[1]:
+                                    print(item[1] +": "+ item[3] + ", damage: " + str(item[2]))
                 continue
 
             elif words[0] == 'vanish':
@@ -203,7 +206,7 @@ class Dungeon:
                     else:
                         damage = mob[2] - self.attack
                         self.c.execute("UPDATE mobs SET health={} WHERE room_id={}".format(damage,self.current_room))
-                        print("You did {} damage to {} with your {}. {} has {} health left".format(self.attack, mob[1],self.equiped, mob[1],mob[2]-self.attack))
+                        print("You did {} damage to {}. {} has {} health left".format(self.attack, mob[1], mob[1],mob[2]-self.attack))
                 else:
                     print("{} dodged your attack!!".format(mob[1]))
 
@@ -228,12 +231,14 @@ class Dungeon:
             elif words[0] == 'stats':
                 print("You have " + color(self.health) + str(self.health) + RESET + " health")
                 print("Your attack is " + color(self.attack) + str(self.attack) + RESET)
-                print("You have {} equiped".format(self.equiped))
+                #print("You have {} equiped".format(self.equiped))
                 continue
 
             elif words[0] == 'items':
                 for i, item in enumerate(self.items):
-                    print(str(i+1) + ". " + item)
+                    self.c.execute('SELECT * from loot WHERE name="{}"'.format(item))
+                    x = self.c.fetchone()
+                    print(str(i+1) + " " + x[1] +": "+ x[3] + ", damage: " + str(x[2]))
                 continue
 
             elif words[0] == 'take':
@@ -286,6 +291,8 @@ class Dungeon:
         # and show the florid description only the first time we visit
         # a room, or if someone types "look" explicitly (so will
         # probably want a force_florid optional parameter to this function)
+        self.c.execute("SELECT short_desc FROM rooms WHERE id={}".format(self.current_room))
+        print(self.c.fetchone()[0])
         self.c.execute("SELECT florid_desc FROM rooms WHERE id={}".format(self.current_room))
         print(self.c.fetchone()[0])
         self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
@@ -333,7 +340,6 @@ class Dungeon:
         self.attack = 5  # base attack "punch"
         self.health = 100  # base player health
         self.items = []  # base player inventory
-        self.equiped = "fists"
         self.current_room = self.getEntranceOrCreateDatabase()
         self.c.execute('INSERT INTO user (username, password, health, room_id, super) VALUES ("{}","{}",{},{},{})'.format(self.user,psw,self.health,1,int(self.super)))
         self.db.commit()
@@ -360,7 +366,6 @@ class Dungeon:
             self.items.append(item[0])
             self.c.execute('SELECT damage FROM loot WHERE name="{}"'.format(item[0]))
             damage = self.c.fetchone()
-            self.equiped = item[0]
             self.attack = max(self.attack,damage[0]) # updates attack value to best item
 
     def saveuser(self):
