@@ -354,6 +354,7 @@ class Dungeon:
         if correct is None or len(correct) < 4:
             print("Incorrect password for user")
             self.login()
+            return None
         if correct[4] == 1:
             self.prompt =  RED + self.user + " ! "+RESET
             self.super = True
