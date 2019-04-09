@@ -138,6 +138,16 @@ class Dungeon:
                     print("Not a valid id")
                     continue
 
+            elif words[0] == 'map':
+                if not self.super:
+                    print("must be super user to do that try: \'super\'")
+                    continue
+                self.c.execute('SELECT * FROM rooms')
+                x = self.c.fetchall()
+                print("id| Description | Long Description | Users? | Loot")
+                for i in x:
+                    print("{} | {} | {}".format(i[0],i[1], i[2]))
+
             elif words[0] == 'inspect':
                 if self.super: # inspect any item
                     self.c.execute("SELECT name FROM loot".format(self.current_room))
