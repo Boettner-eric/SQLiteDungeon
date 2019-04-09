@@ -3,12 +3,14 @@ bot
 super *
 loot sword 10 | A sharp blade
 loot dagger 5 | A small blade
-loot torch 1 | ...
+loot torch 1 | Lit with fire
 loot spear 15 | Sharp
 loot lance 20 | Kinda like a spear
 loot axe 10 | A heavy but blunt weapon
+loot knife 3 | Useful for chopping
 place spear
 dig east west | A small room | Pretty Normal
+dig up down | The Kitchen | It smells pretty good...
 go east
 place torch
 spawn wizard 20 sword
@@ -19,6 +21,10 @@ dig east west | The Armory | Stock full of weapons
 go east
 place lance
 spawn knight 40 axe
+tele
+1
+go up
+spawn chef 10 knife
 tele
 1
 exit
