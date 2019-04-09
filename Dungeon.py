@@ -10,6 +10,7 @@ YELLOW = '\033[33m'
 PURPLE = '\033[95m'
 RESET = '\033[0m'
 
+DIRECTIONS = ['east','west','north','south','up','down']
 
 def color(num):
     if num > 50:
@@ -21,36 +22,12 @@ def color(num):
 
 class Dungeon:
     """
-    """
-
-    dungeon_map = "dungeon.map"
-    prompt = '> '
-    attack = 5  # base attack "punch"
-    health = 100  # base player health
-    items = []  # base player inventory
-    user = input("username: ")
-    # password = input("password: ")
-    # todo: authenticate users with table of passwords
-
-    """
     Note:
     - Commands with "continue" don't progress clock/attack schedule
     - super user has elevated permissions to modify the world but can't interact/fight mobs
     """
     def repl(self):
-        self.db = sqlite3.connect(self.dungeon_map)
-        self.c = self.db.cursor()
-        self.current_room = self.getEntranceOrCreateDatabase()
-        self.super = False
-
         self.doLook()
-        self.c.execute('SELECT name FROM inventory WHERE player = "{}"'.format(self.user))
-        for item in self.c.fetchall():
-            self.items.append(item[0])
-            self.c.execute('SELECT damage FROM loot WHERE name="{}"'.format(item[0]))
-            damage = self.c.fetchone()
-            self.attack = max(self.attack,damage[0]) # updates attack value to best item
-
         while True:
             if self.health <= 0:
                 print(RED+"you died..."+RESET)
@@ -65,6 +42,7 @@ class Dungeon:
             if len(words) == 0:
                 continue
             elif words[0] in ('exit', 'quit', 'q'):
+                self.saveuser()
                 break
 
             # destroy the dungeon and start over
@@ -107,6 +85,9 @@ class Dungeon:
                     continue
                 forward = words[1]
                 reverse = words[2]
+                if forward not in DIRECTIONS or reverse not in DIRECTIONS:
+                    print(RED + "Not a valid direction, try " + RESET + str(DIRECTIONS))
+                    continue
                 brief = descs[1].strip() # strip removes whitespace around |'s
                 florid = descs[2].strip()
                 # now that we have the directions and descriptions,
@@ -123,13 +104,13 @@ class Dungeon:
 
             elif words[0] == 'super':
                 if len(words) != 1 and words[1] == '*': # add a password here (must be one string with no spaces)
-                    self.prompt =  RED+"! "+RESET
+                    self.prompt =  RED + self.user + " ! "+RESET
                     self.super = True
                 else:
                     print("need a passcode to become a "+RED+"super"+RESET+" user")
 
             elif words[0] == 'normal':
-                self.prompt = "> "
+                self.prompt = self.user +" > "
                 self.super = False
 
             elif words[0] == 'place':
@@ -168,10 +149,13 @@ class Dungeon:
                     if item is not None:
                         print(item[1] +": "+ item[3] + ", damage: " + str(item[2]))
                 else: # inspect any item in the room
-                    self.c.execute("SELECT * FROM item WHERE room_id='{}'".format(self.current_room))
-                    item = self.c.fetchone()
-                    if item is not None:
-                        print(item[1] +": "+ item[3] + ", damage: " + str(item[2]))
+                    if len(words) > 1:
+                        self.c.execute("SELECT * FROM item WHERE room_id='{}'".format(self.current_room))
+                        items = self.c.fetchall()
+                        if items is not None:
+                            for item in items:
+                                if item[1] == words[1]:
+                                    print(item[1] +": "+ item[3] + ", damage: " + str(item[2]))
                 continue
 
             elif words[0] == 'vanish':
@@ -222,9 +206,18 @@ class Dungeon:
                     else:
                         damage = mob[2] - self.attack
                         self.c.execute("UPDATE mobs SET health={} WHERE room_id={}".format(damage,self.current_room))
-                        print("You did {} damage to {}. {} has {} health left".format(self.attack, mob[1],mob[1],mob[2]-self.attack))
+                        self.db.commit()
+                        print("You did {} damage to {}. {} has {} health left".format(self.attack, mob[1], mob[1],mob[2]-self.attack))
                 else:
                     print("{} dodged your attack!!".format(mob[1]))
+
+            elif words[0] == 'list':
+                if not self.super:
+                    print("must be super user to do that try: \'super\'")
+                    continue
+                self.c.execute('SELECT * FROM user')
+                for i in self.c.fetchall():
+                    print(i)
 
             elif words[0] == 'steal':
                 chance = randrange(100)
@@ -239,11 +232,14 @@ class Dungeon:
             elif words[0] == 'stats':
                 print("You have " + color(self.health) + str(self.health) + RESET + " health")
                 print("Your attack is " + color(self.attack) + str(self.attack) + RESET)
+                #print("You have {} equiped".format(self.equiped))
                 continue
 
             elif words[0] == 'items':
                 for i, item in enumerate(self.items):
-                    print(str(i+1) + ". " + item)
+                    self.c.execute('SELECT * from loot WHERE name="{}"'.format(item))
+                    x = self.c.fetchone()
+                    print(str(i+1) + " " + x[1] +": "+ x[3] + ", damage: " + str(x[2]))
                 continue
 
             elif words[0] == 'take':
@@ -278,18 +274,17 @@ class Dungeon:
                 damage = self.c.fetchone()[0]
                 print(mob[1] + " attacked you! You lost " + str(damage)+ " health")
                 self.health -= damage
-            self.db.commit() # here?
+            self.db.commit()
 
         # all done, clean exit
         print("bye!")
-        self.db.close()
 
     # helper function to place an item in current room
     def place(self,name):
         self.c.execute("SELECT * FROM loot WHERE name='{}'".format(name))
         item = self.c.fetchone()
         self.c.execute('INSERT INTO item (name, damage, desc, room_id) VALUES ("{}",{},"{}",{})'.format(name,item[2],item[3],self.current_room))
-        pass
+        self.db.commit()
 
     # describe this room and its exits
     def doLook(self):
@@ -297,6 +292,8 @@ class Dungeon:
         # and show the florid description only the first time we visit
         # a room, or if someone types "look" explicitly (so will
         # probably want a force_florid optional parameter to this function)
+        self.c.execute("SELECT short_desc FROM rooms WHERE id={}".format(self.current_room))
+        print(self.c.fetchone()[0])
         self.c.execute("SELECT florid_desc FROM rooms WHERE id={}".format(self.current_room))
         print(self.c.fetchone()[0])
         self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
@@ -318,13 +315,7 @@ class Dungeon:
             print("{}  ".format(exit[0]), end='')
         print("")
 
-    def authenticate(self,username,password):
-        print("Todo")
-
-    # handle startup
-    def getEntranceOrCreateDatabase(self):
-        # check if we've initialized the database before
-        # does it have a "rooms" table
+    def login(self):
         self.c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='rooms'")
         db_exists = self.c.fetchone()
         if (db_exists is None):
@@ -333,15 +324,70 @@ class Dungeon:
             self.c.execute("DROP TABLE if exists loot")
             self.c.execute("DROP TABLE if exists exits")
             self.c.execute("DROP TABLE if exists inventory")
-            self.c.execute("CREATE TABLE rooms (id INTEGER PRIMARY KEY AUTOINCREMENT, short_desc TEXT, florid_desc TEXT)")
-            self.c.execute("CREATE TABLE mobs (id INTEGER PRIMARY KEY AUTOINCREMENT, desc TEXT, health INTEGER, loot TEXT, room_id INTEGER)")
-            self.c.execute("CREATE TABLE loot (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, damage INTEGER, desc TEXT)")
-            self.c.execute("CREATE TABLE item (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, damage INTEGER, desc TEXT, room_id INTEGER)")
-            self.c.execute("CREATE TABLE inventory (name TEXT, player TEXT)") ## add to all instances
-            self.c.execute("CREATE TABLE exits (from_room INTEGER, to_room INTEGER, dir TEXT)")
-            self.c.execute("INSERT INTO rooms (florid_desc, short_desc) VALUES ('You are standing at the entrance of what appears to be a vast, complex cave.', 'entrance')")
-            self.db.commit()
+            self.user = input("username: ")
+            self.newuser()
+            return None
+        self.user = input("username: ")
+        self.c.execute('SELECT * FROM user WHERE username="{}"'.format(self.user)) # if a username exists
+        if self.c.fetchall() == []:
+            self.newuser()
+        else:
+            self.authenticate()
 
+    def newuser(self):
+        psw = input("enter a password for '{}': ".format(self.user))
+        self.prompt = '> '
+        self.super = False
+        self.attack = 5  # base attack "punch"
+        self.health = 100  # base player health
+        self.items = []  # base player inventory
+        self.current_room = self.getEntranceOrCreateDatabase()
+        self.c.execute('INSERT INTO user (username, password, health, room_id, super) VALUES ("{}","{}",{},{},{})'.format(self.user,psw,self.health,1,int(self.super)))
+        self.db.commit()
+
+    def authenticate(self):
+        psw = input("password: ")
+        self.c.execute('SELECT * FROM user WHERE username="{}" AND password="{}"'.format(self.user,psw))
+        correct = self.c.fetchone()
+        if correct is [] or correct is None:
+            print("Incorrect password for user")
+            self.login()
+        if correct[4] == 1:
+            self.prompt =  RED + self.user + " ! "+RESET
+            self.super = True
+        else:
+            self.prompt = self.user + ' > '
+            self.super = False
+        self.current_room = correct[3]
+        self.health = correct[2]  # base player health
+        self.items = []  # base player inventory
+        self.attack = 5 # base attack
+        self.c.execute('SELECT name FROM inventory WHERE player = "{}"'.format(self.user))
+        for item in self.c.fetchall():
+            self.items.append(item[0])
+            self.c.execute('SELECT damage FROM loot WHERE name="{}"'.format(item[0]))
+            damage = self.c.fetchone()
+            self.attack = max(self.attack,damage[0]) # updates attack value to best item
+
+    def saveuser(self):
+        self.c.execute('UPDATE user SET health={}, super={}, room_id={} WHERE username="{}"'.format(self.health,int(self.super),self.current_room,self.user)) # isn't working rn
+        self.db.commit()
+        print("Saved")
+        self.db.close()
+
+    # handle startup
+    def getEntranceOrCreateDatabase(self):
+        # check if we've initialized the database before
+        # does it have a "rooms" table
+        self.c.execute("CREATE TABLE rooms (id INTEGER PRIMARY KEY AUTOINCREMENT, short_desc TEXT, florid_desc TEXT)")
+        self.c.execute("CREATE TABLE mobs (id INTEGER PRIMARY KEY AUTOINCREMENT, desc TEXT, health INTEGER, loot TEXT, room_id INTEGER)")
+        self.c.execute("CREATE TABLE loot (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, damage INTEGER, desc TEXT)")
+        self.c.execute("CREATE TABLE item (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, damage INTEGER, desc TEXT, room_id INTEGER)")
+        self.c.execute("CREATE TABLE inventory (name TEXT, player TEXT)") ## add to all instances
+        self.c.execute("CREATE TABLE exits (from_room INTEGER, to_room INTEGER, dir TEXT)")
+        self.c.execute("CREATE TABLE user (username TEXT, password TEXT, health INTEGER, room_id INTEGER, super INTEGER)")
+        self.c.execute("INSERT INTO rooms (florid_desc, short_desc) VALUES ('You are standing at the entrance of what appears to be a vast, complex cave.', 'entrance')")
+        self.db.commit()
         # now we know the db exists - fetch the first room, which is
         # the entrance
         self.c.execute("SELECT MIN(id) FROM rooms")
@@ -359,5 +405,8 @@ if __name__ == '__main__':
         open(histfile, 'wb').close()
 
     d = Dungeon()
+    d.db = sqlite3.connect("dungeon.map")
+    d.c = d.db.cursor()
+    d.login()
     print("Welcome to the dungeon. Try 'look' 'go' and 'dig'")
     d.repl()
