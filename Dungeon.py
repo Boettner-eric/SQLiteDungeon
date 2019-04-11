@@ -383,6 +383,7 @@ class Dungeon:
             if len(words) < 3:
                 print("usage: loot <name> <damage> | <description of item> OR loot list")
                 return
+            line = " ".join(words)
             descs = line.split("|")
             words = descs[0].split()
             query = 'INSERT INTO loot (name, damage, desc) VALUES ("{}", {}, "{}")'.format(words[1].strip(), int(words[2]), descs[1].strip())
