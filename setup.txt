@@ -20,7 +20,7 @@ spawn knight 25 spear
 dig east west | The Armory | Stock full of weapons
 east
 place lance
-spawn knight 40 axe
+spawn archer 40 axe
 tele 1
 up
 spawn chef 10 knife

@@ -4,6 +4,7 @@ A project developed for Intro to Operating Systems
 
 Features:
 - Mobs and Loot assigned to rooms
+- Random range for items
 - Attack mechanics
 - 17+ commands
 - Super user for creation of dungeon with mobs and loot
@@ -27,7 +28,6 @@ Super User:
 - list all user profiles
 
 On the way:
-- Impelement room persistance for users (done)
 - User authentication using sql (done - but add encryption)
 - Multiplayer support (chat, interactions, fights?)
 - Better stats (defense, chance, magic...)

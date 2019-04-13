@@ -30,17 +30,55 @@ class Dungeon:
       interact/fight mobs
     """
     visited = []   # tracks rooms visited this session
+    filename = "dungeon.map"
+    online = []
+
+    def updates(self):
+        self.c.execute('SELECT username FROM user WHERE status="online"')
+        x = self.c.fetchall()
+        new_usr = [i[0] for i in x if i not in self.online and i[0] != self.user]
+        if new_usr != self.online and len(new_usr) > 0:
+            if new_usr != []:
+                users = ", ".join(new_usr)
+                print(GREEN + "{} online".format(users) + RESET)
+                self.online = new_usr
+        if len(new_usr) < len(self.online):
+            old_usr = [i for i in self.online if i not in x and i != self.user]
+            users = ", ".join(old_usr)
+            print(RED + "{} offline".format(users) + RESET)
+            self.online = new_usr
+
+    def update_usr(self):
+        self.c.execute('UPDATE user SET health={}, room_id={}, super={} WHERE username="{}"'.format(self.health, self.current_room, int(self.super), self.user))
+        self.db.commit()
+
+    def combat(self):
+        self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
+        mob = self.c.fetchone() # todo: have multiple mobs at once
+        if mob is not None:
+            self.c.execute('SELECT damage FROM item WHERE owner="{}"'.format(mob[1]))
+            damage = self.c.fetchone()
+            if damage is not None:
+                print(mob[1] + " attacked you! You lost " + str(damage[0])+ " health")
+                self.health -= damage[0]
+                self.update_usr()
+            else:
+                print(RED + "Error reading item" + RESET)
+
+    def is_dead(self):
+        if self.health <= 0:
+            print(RED+"you died..."+RESET)
+            print("you seemed to have lost your items and ended up back at the entrance")
+            self.current_room = 1
+            self.health = 100
+            self.attack = 5
+            self.items = []
+            self.update_usr()
 
     def repl(self):
         self.doLook()
         while True:
-            if self.health <= 0:
-                print(RED+"you died..."+RESET)
-                print("you seemed to have lost your items and ended up back at the entrance")
-                self.current_room = 1
-                self.health = 100
-                self.items = []
-
+            self.updates()
             line = input(self.prompt)
             words = line.split()
 
@@ -75,18 +113,21 @@ class Dungeon:
                     self.current_room = new_room_p[0]
                     self.visited.append(self.current_room)
                     self.doLook()
-
+                    self.update_usr()
 
             elif words[0] == 'super':
                 if len(words) != 1 and words[1] == '*':  # add a password here (must be one string with no spaces)
                     self.prompt = RED + self.user + " ! " + RESET
                     self.super = True
+                    self.update_usr()
+                    continue
                 else:
                     print("need a passcode to become a "+RED+"super"+RESET+" user")
 
             elif words[0] == 'normal':
                 self.prompt = self.user + " > "
                 self.super = False
+                self.update_usr()
                 continue
 
             elif words[0] == 'inspect':
@@ -117,8 +158,10 @@ class Dungeon:
                     if mob[2] <= self.attack:
                         self.c.execute("DELETE FROM mobs WHERE room_id={}".format(self.current_room))
                         print("You killed {}!".format(mob[1]))
-                        print("It dropped a {}".format(mob[3]))
-                        self.place(mob[3])
+                        self.c.execute('SELECT name FROM item WHERE owner="{}"'.format(mob[1]))
+                        item = self.c.fetchone()
+                        print("It dropped a {}".format(item[0]))
+                        self.place(item[0])
                     else:
                         damage = mob[2] - self.attack
                         self.c.execute("UPDATE mobs SET health={} WHERE room_id={}".format(damage,self.current_room))
@@ -187,17 +230,12 @@ class Dungeon:
                 print("unknown command {}".format(words[0]))
                 continue
 
-            self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
-            mob = self.c.fetchone() # todo: have multiple mobs at once
-            if not self.super and mob is not None:
-                self.c.execute('SELECT damage FROM item WHERE name = "{}" AND owner="{}"'.format(mob[3],mob[1]))
-                damage = self.c.fetchone()
-                print(mob[1] + " attacked you! You lost " + str(damage[0])+ " health")
-                self.health -= damage[0]
-            self.db.commit()
+            if not self.super:
+                self.combat()
+                self.is_dead()
 
     # helper function to place an item in current room
-    def place(self,name,owner=""):
+    def place(self, name, owner=""):
         if owner == "":
             self.c.execute("SELECT * FROM loot WHERE name='{}'".format(name))
             item = self.c.fetchone()
@@ -209,10 +247,6 @@ class Dungeon:
 
     # describe this room and its exits
     def doLook(self):
-        # todo: change the schema so we mark rooms as we visit them,
-        # and show the florid description only the first time we visit
-        # a room, or if someone types "look" explicitly (so will
-        # probably want a force_florid optional parameter to this function)
         self.c.execute("SELECT short_desc FROM rooms WHERE id={}".format(self.current_room))
         print(self.c.fetchone()[0])
         self.c.execute("SELECT florid_desc FROM rooms WHERE id={}".format(self.current_room))
@@ -220,7 +254,9 @@ class Dungeon:
         self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
         mob = self.c.fetchone()
         if mob:
-            print("There is an " + mob[1] + " with " + str(mob[2]) + " health, carrying a " + mob[3])
+            self.c.execute('SELECT name FROM item WHERE owner="{}"'.format(mob[1]))
+            x = self.c.fetchone()
+            print("There is an " + mob[1] + " with " + str(mob[2]) + " health, carrying a " + x[0])
         self.c.execute("SELECT name FROM item WHERE room_id={}".format(self.current_room))
         items = self.c.fetchall()
         if items != []:
@@ -294,7 +330,7 @@ class Dungeon:
         self.db.commit()
 
     def saveuser(self):
-        self.c.execute('UPDATE user SET health={}, super={}, room_id={}, status="offline" WHERE username="{}"'.format(self.health,int(self.super),self.current_room,self.user)) # isn't working rn
+        self.c.execute('UPDATE user SET health={}, super={}, room_id={}, status="offline" WHERE username="{}"'.format(self.health,int(self.super),self.current_room,self.user))
         self.db.commit()
         print("Saved")
         self.db.close()
@@ -308,6 +344,13 @@ class Dungeon:
         self.c.execute("CREATE TABLE exits (from_room INTEGER, to_room INTEGER, dir TEXT)")
         self.c.execute("CREATE TABLE user (username TEXT, password TEXT, health INTEGER, room_id INTEGER, super INTEGER, status TEXT)")
         self.c.execute("INSERT INTO rooms (florid_desc, short_desc) VALUES ('You are standing at the entrance of what appears to be a vast, complex cave.', 'entrance')")
+        self.db.commit()
+
+    def spawn(self, name, health, loot):
+        damage = randrange(loot[2],loot[3]) # finds damage value in range
+        query = 'INSERT INTO mobs (desc, health, loot, room_id) VALUES ("{}", {}, "{}", {})'.format(name, int(damage), health, self.current_room)
+        self.c.execute(query)
+        self.c.execute('INSERT INTO item (name, damage, desc, room_id, owner) VALUES ("{}",{},"{}",{},"{}")'.format(loot[1],damage, loot[4], -1, name))
         self.db.commit()
 
     def super_com(self, words):
@@ -354,6 +397,7 @@ class Dungeon:
                 self.current_room = int(words[1])
                 print(BLUE + "You teleported!" + RESET)
                 self.doLook()
+                self.update_usr()
             else:
                 print("Not a valid id")
                 return
@@ -361,13 +405,14 @@ class Dungeon:
         elif words[0] == 'map':
             self.c.execute('SELECT * FROM rooms')
             x = self.c.fetchall()
-            print("id| Description | Long Description | Users? | Loot")
+            print("id| Description | Long Description |")
             for i in x:
-                print("{} | {} | {}".format(i[0], i[1], i[2]))
+                print("{} | {} | {}|".format(i[0], i[1], i[2]))
 
         elif words[0] == 'vanish':
             query = "DELETE FROM mobs WHERE room_id={}".format(self.current_room) # deletes all mobs in current room
             self.c.execute(query)
+            self.doLook()
 
         elif words[0] == 'spawn':
             if len(words) < 4:
@@ -378,12 +423,7 @@ class Dungeon:
             if (loot is None):
                 print("that isn't valid loot, try adding it with \'loot {}...\'".format(words[3]))
                 return
-            loot = loot[0]
-            damage = randrange(loot[2],loot[3])
-            query = 'INSERT INTO mobs (desc, health, loot, room_id) VALUES ("{}", {}, "{}", {})'.format(words[1].strip(), int(damage), words[3], self.current_room)
-            self.c.execute(query)
-            self.c.execute('INSERT INTO item (name, damage, desc, room_id, owner) VALUES ("{}",{},"{}",{},"{}")'.format(loot[1],damage, loot[4], -1, words[1]))
-            self.db.commit()
+            self.spawn(words[1], words[2], loot[0])
 
         elif words[0] == 'loot':
             if len(words) < 4:
@@ -438,7 +478,7 @@ if __name__ == '__main__':
         open(histfile, 'wb').close()
 
     d = Dungeon()
-    d.db = sqlite3.connect("dungeon.map")
+    d.db = sqlite3.connect(d.filename)
     d.c = d.db.cursor()
     d.login()
     print("Welcome to the dungeon. Try 'look' 'go' and 'dig'")
