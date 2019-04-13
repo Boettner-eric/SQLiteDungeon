@@ -12,7 +12,7 @@ PURPLE = '\033[95m'
 RESET = '\033[0m'
 
 DIRECTIONS = ['east', 'west', 'north', 'south', 'up', 'down']
-SUPER_COMMANDS = ['loot','spawn','vanish','dig','place','tele','map']
+SUPER_COMMANDS = ['loot','spawn','vanish','dig','place','tele','map','table','debug']
 
 def color(num):
     if num > 50:
@@ -37,7 +37,7 @@ class Dungeon:
             if self.health <= 0:
                 print(RED+"you died..."+RESET)
                 print("you seemed to have lost your items and ended up back at the entrance")
-                self.current_room = self.getEntranceOrCreateDatabase()
+                self.current_room = 1
                 self.health = 100
                 self.items = []
 
@@ -73,6 +73,7 @@ class Dungeon:
                     continue
                 else:
                     self.current_room = new_room_p[0]
+                    self.visited.append(self.current_room)
                     self.doLook()
 
 
@@ -98,7 +99,7 @@ class Dungeon:
                     self.c.execute("SELECT * FROM loot WHERE name='{}'".format(name))
                     item = self.c.fetchone()
                     if item is not None:
-                        print(item[1] + ": " + item[3] + ", damage: " + str(item[2]))
+                        print(item[1] + ": " + item[4] + ", damage: [{}-{}]".format(item[2],item[3]))
                 else: # inspect any item in the room
                     if len(words) > 1:
                         self.c.execute("SELECT * FROM item WHERE room_id='{}'".format(self.current_room))
@@ -112,7 +113,7 @@ class Dungeon:
             elif words[0] == 'attack':
                 self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
                 mob = self.c.fetchone()
-                if randrange(100) < 80: # todo: more player/mob stats
+                if randrange(200) < 180: # todo: more player/mob stats
                     if mob[2] <= self.attack:
                         self.c.execute("DELETE FROM mobs WHERE room_id={}".format(self.current_room))
                         print("You killed {}!".format(mob[1]))
@@ -155,7 +156,7 @@ class Dungeon:
 
             elif words[0] == 'items':
                 for i, item in enumerate(self.items):
-                    self.c.execute('SELECT * from loot WHERE name="{}"'.format(item))
+                    self.c.execute('SELECT * from item WHERE name="{}" and owner="{}"'.format(item,self.user))
                     x = self.c.fetchone()
                     print(str(i+1) + " " + x[1] +": "+ x[3] + ", damage: " + str(x[2]))
                 continue
@@ -173,8 +174,8 @@ class Dungeon:
                             if x[2] > self.attack:
                                 self.attack = x[2]
                                 print("Your attack is now {}".format(self.attack))
-                            self.c.execute('INSERT INTO inventory (player, name) VALUES ("{}","{}")'.format(self.user, x[1]))
-                            self.c.execute('DELETE FROM item WHERE room_id={} AND name="{}"'.format(self.current_room, x[1]))
+                            self.c.execute('UPDATE item SET owner="{}" WHERE room_id={}'.format(self.user,self.current_room))
+                            self.c.execute('UPDATE item SET room_id=-1 WHERE owner="{}"'.format(self.user))
                             self.db.commit()
                             break
 
@@ -189,17 +190,21 @@ class Dungeon:
             self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
             mob = self.c.fetchone() # todo: have multiple mobs at once
             if not self.super and mob is not None:
-                self.c.execute('SELECT damage FROM loot WHERE name = "{}"'.format(mob[3]))
-                damage = self.c.fetchone()[0]
-                print(mob[1] + " attacked you! You lost " + str(damage)+ " health")
-                self.health -= damage
+                self.c.execute('SELECT damage FROM item WHERE name = "{}" AND owner="{}"'.format(mob[3],mob[1]))
+                damage = self.c.fetchone()
+                print(mob[1] + " attacked you! You lost " + str(damage[0])+ " health")
+                self.health -= damage[0]
             self.db.commit()
 
     # helper function to place an item in current room
-    def place(self,name):
-        self.c.execute("SELECT * FROM loot WHERE name='{}'".format(name))
-        item = self.c.fetchone()
-        self.c.execute('INSERT INTO item (name, damage, desc, room_id) VALUES ("{}",{},"{}",{})'.format(name,item[2],item[3],self.current_room))
+    def place(self,name,owner=""):
+        if owner == "":
+            self.c.execute("SELECT * FROM loot WHERE name='{}'".format(name))
+            item = self.c.fetchone()
+            damage = randrange(item[2],item[3]) # takes damage from range instead of int
+            self.c.execute('INSERT INTO item (name, damage, desc, room_id) VALUES ("{}",{},"{}",{})'.format(name,damage,item[4], self.current_room))
+        else:
+            self.c.execute("UPDATE item SET room_id='{}', owner='{}' WHERE owner='{}'".format(self.current_room,"",owner))
         self.db.commit()
 
     # describe this room and its exits
@@ -216,8 +221,6 @@ class Dungeon:
         mob = self.c.fetchone()
         if mob:
             print("There is an " + mob[1] + " with " + str(mob[2]) + " health, carrying a " + mob[3])
-        else:
-            print("There are no mobs in this room")
         self.c.execute("SELECT name FROM item WHERE room_id={}".format(self.current_room))
         items = self.c.fetchall()
         if items != []:
@@ -239,7 +242,6 @@ class Dungeon:
             self.c.execute("DROP TABLE if exists mobs")
             self.c.execute("DROP TABLE if exists loot")
             self.c.execute("DROP TABLE if exists exits")
-            self.c.execute("DROP TABLE if exists inventory")
             self.CreateDatabase()
             self.user = input("username: ")
             self.newuser()
@@ -281,12 +283,13 @@ class Dungeon:
         self.health = correct[2]  # base player health
         self.items = []  # base player inventory
         self.attack = 5 # base attack
-        self.c.execute('SELECT name FROM inventory WHERE player = "{}"'.format(self.user))
+        self.c.execute('SELECT name FROM item WHERE owner = "{}"'.format(self.user))
         for item in self.c.fetchall():
             self.items.append(item[0])
-            self.c.execute('SELECT damage FROM loot WHERE name="{}"'.format(item[0]))
+            self.c.execute('SELECT damage FROM item WHERE name="{}" AND owner="{}"'.format(item[0],self.user))
             damage = self.c.fetchone()
-            self.attack = max(self.attack,damage[0]) # updates attack value to best item
+            if damage is not None:
+                self.attack = max(self.attack,damage[0]) # updates attack value to best item
         self.c.execute('UPDATE user SET status="online" WHERE username="{}"'.format(self.user))
         self.db.commit()
 
@@ -300,9 +303,8 @@ class Dungeon:
     def CreateDatabase(self):
         self.c.execute("CREATE TABLE rooms (id INTEGER PRIMARY KEY AUTOINCREMENT, short_desc TEXT, florid_desc TEXT)")
         self.c.execute("CREATE TABLE mobs (id INTEGER PRIMARY KEY AUTOINCREMENT, desc TEXT, health INTEGER, loot TEXT, room_id INTEGER)")
-        self.c.execute("CREATE TABLE loot (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, damage INTEGER, desc TEXT)")
-        self.c.execute("CREATE TABLE item (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, damage INTEGER, desc TEXT, room_id INTEGER)")
-        self.c.execute("CREATE TABLE inventory (name TEXT, player TEXT)") ## add to all instances
+        self.c.execute("CREATE TABLE loot (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, min INTEGER, max INTEGER, desc TEXT)") # items have range of damage
+        self.c.execute("CREATE TABLE item (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, damage INTEGER, desc TEXT, room_id INTEGER, owner TEXT)") # specific items have damage value
         self.c.execute("CREATE TABLE exits (from_room INTEGER, to_room INTEGER, dir TEXT)")
         self.c.execute("CREATE TABLE user (username TEXT, password TEXT, health INTEGER, room_id INTEGER, super INTEGER, status TEXT)")
         self.c.execute("INSERT INTO rooms (florid_desc, short_desc) VALUES ('You are standing at the entrance of what appears to be a vast, complex cave.', 'entrance')")
@@ -371,25 +373,59 @@ class Dungeon:
             if len(words) < 4:
                 print("usage: spawn <name> <health> <loot>")
                 return
-            self.c.execute('SELECT name FROM loot WHERE name = "{}"'.format(words[3]))
-            if (self.c.fetchall() is None):
+            self.c.execute('SELECT * FROM loot WHERE name = "{}"'.format(words[3]))
+            loot = self.c.fetchall()
+            if (loot is None):
                 print("that isn't valid loot, try adding it with \'loot {}...\'".format(words[3]))
                 return
-            query = 'INSERT INTO mobs (desc, health, loot, room_id) VALUES ("{}", {}, "{}", {})'.format(words[1].strip(), int(words[2]), words[3], self.current_room)
+            loot = loot[0]
+            damage = randrange(loot[2],loot[3])
+            query = 'INSERT INTO mobs (desc, health, loot, room_id) VALUES ("{}", {}, "{}", {})'.format(words[1].strip(), int(damage), words[3], self.current_room)
             self.c.execute(query)
+            self.c.execute('INSERT INTO item (name, damage, desc, room_id, owner) VALUES ("{}",{},"{}",{},"{}")'.format(loot[1],damage, loot[4], -1, words[1]))
             self.db.commit()
 
         elif words[0] == 'loot':
-            if len(words) < 3:
-                print("usage: loot <name> <damage> | <description of item> OR loot list")
+            if len(words) < 4:
+                print("usage: loot <name> <min> <max> | <description of item> OR loot list")
                 return
             line = " ".join(words)
             descs = line.split("|")
             words = descs[0].split()
-            query = 'INSERT INTO loot (name, damage, desc) VALUES ("{}", {}, "{}")'.format(words[1].strip(), int(words[2]), descs[1].strip())
+            query = 'INSERT INTO loot (name, min, max, desc) VALUES ("{}", {}, {}, "{}")'.format(words[1].strip(), int(words[2]), int(words[3]), descs[1].strip())
             self.c.execute(query)
             self.db.commit()
 
+        elif words[0] == "table":
+            if len(words) < 2:
+                print("usage: table <type>")
+                return
+            try:
+                self.c.execute("SELECT * FROM {}".format(words[1]))
+                x = self.c.fetchall()
+            except:
+                print(RED + "not a valid table" + RESET)
+                return
+            for i in x:
+                for j in i:
+                    print("{} | ".format(j),end='')
+                print("")
+
+        elif words[0] == "debug":
+            x = input("Enter passcode: ") # just to make it a little harder to make a big error
+            if b64encode(x.encode("utf-8")) == b'Tm9vb28=':
+                line = " ".join(words)
+                descs = line.split("|")
+                if "SELECT" not in descs[1]:
+                    print(RED + "only SELECT is allowed" + RESET)
+                    return
+                try:
+                    self.c.execute(descs[1])
+                    print(self.c.fetchall())
+                except:
+                    print(RED + "bad command" + RESET)
+            else:
+                print(RED + "bad passcode " + RESET)
 
 assert sys.version_info >= (3,0), "This program requires Python 3"
 
