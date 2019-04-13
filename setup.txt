@@ -1,13 +1,13 @@
 bot
 *
 super *
-loot sword 10 | A sharp blade
-loot dagger 5 | A small blade
-loot torch 1 | Lit with fire
-loot spear 15 | Sharp
-loot lance 20 | Kinda like a spear
-loot axe 10 | A heavy but blunt weapon
-loot knife 3 | Useful for chopping
+loot sword 10 25 | A sharp blade
+loot dagger 5 10 | A small blade
+loot torch 1 2 | Lit with fire
+loot spear 15 35 | Sharp
+loot lance 20 50 | Kinda like a spear
+loot axe 10 35 | A heavy but blunt weapon
+loot knife 3  10 | Useful for chopping
 place spear
 dig east west | A small room | Pretty Normal
 dig up down | The Kitchen | It smells pretty good...
@@ -21,10 +21,10 @@ dig east west | The Armory | Stock full of weapons
 east
 place lance
 spawn knight 40 axe
-tele
-1
+tele 1
 up
 spawn chef 10 knife
-tele
-1
+tele 1
+dig south north | A small room | Empty
+tele 1
 exit
