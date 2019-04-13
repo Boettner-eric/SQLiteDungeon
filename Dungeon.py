@@ -12,7 +12,9 @@ PURPLE = '\033[95m'
 RESET = '\033[0m'
 
 DIRECTIONS = ['east', 'west', 'north', 'south', 'up', 'down']
-SUPER_COMMANDS = ['loot','spawn','vanish','dig','place','tele','map','table','debug']
+SUPER_COMMANDS = ['loot','spawn','vanish','dig','place','tele','map','table']
+NORMAL_COMMANDS = ['look','go','super','normal','inspect','equip','drop','attack','list','stats','items']
+help = {'loot':'<name> <min> <max> | <desc>','spawn':'<name> <hp> <item>','vanish':'', 'dig':'<dir> <rev> | <name> | <description>','place':'<item>','tele':'<room_id>','map':'','table':'<table name>', 'look':'','go':'<dir> | <dir>','super':'<passcode>','normal':'','inspect':'<item>','equip':'<item>','drop':'<item>','attack':'','list':'','stats':'','items':''}
 
 def color_health(num):
     if num > 50:
@@ -75,9 +77,11 @@ class Dungeon:
         if self.health <= 0:
             print(RED+"you died..."+RESET)
             print("you seemed to have lost your items and ended up back at the entrance")
-            self.current_room = 1
             self.health = 100
             self.attack = 5
+            for item in self.items:
+                self.place(item,self.user) # drops current items into old room
+            self.current_room = 1
             self.items = []
             self.update_usr()
 
@@ -91,7 +95,9 @@ class Dungeon:
             if len(words) == 0:
                 continue
             elif words[0] in ('exit', 'quit', 'q'):
-                self.saveuser()
+                self.update_usr()
+                print("Saved")
+                self.db.close()
                 break
 
             elif words[0] in SUPER_COMMANDS:
@@ -107,7 +113,7 @@ class Dungeon:
             elif words[0] == 'go' or words[0] in DIRECTIONS:
                 # move to an adjacent room.
                 if len(words) < 2 and words[0] not in DIRECTIONS:
-                    print("usage: go <direction> | <direction>")
+                    print("usage: go {}".format(help[words[0]]))
                     continue
                 dir = words[0] if words[0] in DIRECTIONS else words[1]
                 self.c.execute("SELECT to_room FROM exits WHERE from_room = {} AND dir='{}'".format(self.current_room, dir))
@@ -159,7 +165,7 @@ class Dungeon:
 
             elif words[0] == 'drop':
                 if len(words) < 2:
-                    print("usage: drop <item name>")
+                    print("usage: drop {}".format(help[words[0]]))
                     continue
                 if words[1] in self.items:
                     self.c.execute('UPDATE item SET owner="",room_id={} WHERE owner="{}" AND name="{}"'.format(self.current_room, self.user, words[1]))
@@ -171,6 +177,7 @@ class Dungeon:
                     continue
                 else:
                     print(RED + "Not a valid item" + RESET)
+
             elif words[0] == 'attack':
                 self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
                 mob = self.c.fetchone()
@@ -201,16 +208,6 @@ class Dungeon:
                     else:
                         print(super(i[5],'{0: <8}'.format(i[0]))+ " | " + online('{0: <7}'.format(i[6])) + " |") # fix formatting here for names
 
-            elif words[0] == 'steal':
-                chance = randrange(100)
-                if chance > 80:  # todo: implement proper defense / offense stats
-                    self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
-                    mob = self.c.fetchone()
-                    print("You stole a {} from the ".format(mob[3],mob[1]))
-                    self.place(mob[3])
-                else:
-                    print("The {} caught you!".format(mob[1]))
-
             elif words[0] == 'stats':
                 print("You have " + color_health(self.health) + str(self.health) + RESET + " health")
                 print("Your attack is " + color_attack(self.attack) + str(self.attack) + RESET)
@@ -227,7 +224,7 @@ class Dungeon:
 
             elif words[0] == 'equip':
                 if len(words) < 2:
-                    print("usage: equip <item>")
+                    print("usage: equip {}".format(help[words[0]]))
                     continue
                 self.c.execute('SELECT * from item WHERE name="{}" and owner="{}"'.format(words[1],self.user))
                 x = self.c.fetchall()
@@ -252,7 +249,7 @@ class Dungeon:
                 self.c.execute('SELECT * FROM item WHERE room_id={}'.format(self.current_room))
                 item = self.c.fetchall()
                 if len(words) < 2:
-                    print("usage: take <name>")
+                    print("usage: take {}".format(help[words[0]]))
                     continue
                 if item != []:
                     for x in item:
@@ -264,7 +261,13 @@ class Dungeon:
                             break
 
             elif words[0] == 'help':
-                print( RED + "new, dig, normal, place, spawn, loot, vanish, tele" + RESET + " super, look, go, inspect, attack, steal, stats, items, take, help")
+                if self.super:
+                    print(RED, end='')
+                    for i in SUPER_COMMANDS:
+                        print("{0: <8}".format(i) + " | "+ '{}'.format(help[i]))
+                    print(RESET,end='')
+                for j in NORMAL_COMMANDS:
+                    print("{0: <8}".format(j) + " | "+ '{}'.format(help[j]))
                 continue
 
             else:
@@ -366,12 +369,6 @@ class Dungeon:
         self.c.execute('UPDATE user SET status="online" WHERE username="{}"'.format(self.user))
         self.db.commit()
 
-    def saveuser(self):
-        self.c.execute('UPDATE user SET health={}, super={}, attack={}, room_id={}, status="offline" WHERE username="{}"'.format(self.health,int(self.super),self.attack,self.current_room,self.user))
-        self.db.commit()
-        print("Saved")
-        self.db.close()
-
     # handle startup
     def CreateDatabase(self):
         self.c.execute("CREATE TABLE rooms (id INTEGER PRIMARY KEY AUTOINCREMENT, short_desc TEXT, florid_desc TEXT)")
@@ -397,7 +394,7 @@ class Dungeon:
             descs = line.split("|")
             words = descs[0].split()
             if len(words) < 3 or len(descs) != 3:
-                print("usage: dig <direction> <reverse> | <name> | <description>")
+                print("usage: dig {}".format(help[words[0]]))
                 return
             forward = words[1]
             reverse = words[2]
@@ -421,12 +418,13 @@ class Dungeon:
 
         elif words[0] == 'place':
             if len(words) < 2:
-                print("usage: place <loot>")
+                print("usage: place {}".format(help[words[0]]))
+                return
             self.place(words[1])
 
         elif words[0] == 'tele':
             if len(words) < 2:
-                print("usage: tele <room_id>")
+                print("usage: tele {}".format(help[words[0]]))
                 return
             self.c.execute('SELECT id FROM rooms')
             x = [row[0] for row in self.c.fetchall()]
@@ -453,7 +451,7 @@ class Dungeon:
 
         elif words[0] == 'spawn':
             if len(words) < 4:
-                print("usage: spawn <name> <health> <loot>")
+                print("usage: spawn {}".format(help[words[0]]))
                 return
             self.c.execute('SELECT * FROM loot WHERE name = "{}"'.format(words[3]))
             loot = self.c.fetchall()
@@ -464,7 +462,7 @@ class Dungeon:
 
         elif words[0] == 'loot':
             if len(words) < 4:
-                print("usage: loot <name> <min> <max> | <description of item> OR loot list")
+                print("usage: loot {}".format(help[words[0]]))
                 return
             line = " ".join(words)
             descs = line.split("|")
@@ -475,7 +473,7 @@ class Dungeon:
 
         elif words[0] == "table":
             if len(words) < 2:
-                print("usage: table <type>")
+                print("usage: table {}".format(help[words[0]]))
                 return
             try:
                 self.c.execute("SELECT * FROM {}".format(words[1]))
@@ -487,22 +485,6 @@ class Dungeon:
                 for j in i:
                     print("{} | ".format(j),end='')
                 print("")
-
-        elif words[0] == "debug":
-            x = input("Enter passcode: ") # just to make it a little harder to make a big error
-            if b64encode(x.encode("utf-8")) == b'Tm9vb28=':
-                line = " ".join(words)
-                descs = line.split("|")
-                if "SELECT" not in descs[1]:
-                    print(RED + "only SELECT is allowed" + RESET)
-                    return
-                try:
-                    self.c.execute(descs[1])
-                    print(self.c.fetchall())
-                except:
-                    print(RED + "bad command" + RESET)
-            else:
-                print(RED + "bad passcode " + RESET)
 
 assert sys.version_info >= (3,0), "This program requires Python 3"
 
