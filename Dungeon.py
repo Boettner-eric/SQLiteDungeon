@@ -14,13 +14,19 @@ RESET = '\033[0m'
 DIRECTIONS = ['east', 'west', 'north', 'south', 'up', 'down']
 SUPER_COMMANDS = ['loot','spawn','vanish','dig','place','tele','map','table','debug']
 
-def color(num):
+def color_health(num):
     if num > 50:
         return GREEN
     if num > 25:
         return YELLOW
     return RED
 
+def color_attack(num):
+    if num > 50:
+        return RED
+    if num > 25:
+        return YELLOW
+    return GREEN
 
 class Dungeon:
     """
@@ -49,7 +55,7 @@ class Dungeon:
             self.online = new_usr
 
     def update_usr(self):
-        self.c.execute('UPDATE user SET health={}, room_id={}, super={} WHERE username="{}"'.format(self.health, self.current_room, int(self.super), self.user))
+        self.c.execute('UPDATE user SET health={}, attack={}, room_id={}, super={} WHERE username="{}"'.format(self.health, self.attack, self.current_room, int(self.super), self.user))
         self.db.commit()
 
     def combat(self):
@@ -188,12 +194,12 @@ class Dungeon:
                 self.c.execute('SELECT * FROM user')
                 super = lambda y,x: RED + x + RESET if bool(y) else x
                 online = lambda y: GREEN + y + RESET if 'online' in y else y
-                print("name     | hp    | room | status  |" if self.super else "name     | status  |")
+                print("name     | hp    | dmg | room | status  |" if self.super else "name     | status  |")
                 for i in self.c.fetchall():
                     if self.super:
-                        print(super(i[4],'{0: <8}'.format(i[0])) + " | " + color(i[2])+ '{0: <5}'.format(i[2]) + RESET + " | " + '{0: <4}'.format(i[3]) + " | " + online('{0: <7}'.format(i[5])) + " |") # fix formatting here for names
+                        print(super(i[5],'{0: <8}'.format(i[0])) + " | " + color_health(i[2])+ '{0: <5}'.format(i[2]) + RESET + " | " + color_attack(i[3]) + '{0:<3}'.format(i[3]) + RESET + " | " + '{0: <4}'.format(i[4]) + " | " + online('{0: <7}'.format(i[6])) + " |") # fix formatting here for names
                     else:
-                        print(super(i[4],'{0: <8}'.format(i[0]))+ " | " + online('{0: <7}'.format(i[5])) + " |") # fix formatting here for names
+                        print(super(i[5],'{0: <8}'.format(i[0]))+ " | " + online('{0: <7}'.format(i[6])) + " |") # fix formatting here for names
 
             elif words[0] == 'steal':
                 chance = randrange(100)
@@ -206,8 +212,8 @@ class Dungeon:
                     print("The {} caught you!".format(mob[1]))
 
             elif words[0] == 'stats':
-                print("You have " + color(self.health) + str(self.health) + RESET + " health")
-                print("Your attack is " + color(self.attack) + str(self.attack) + RESET)
+                print("You have " + color_health(self.health) + str(self.health) + RESET + " health")
+                print("Your attack is " + color_attack(self.attack) + str(self.attack) + RESET)
                 #print("You have {} equiped".format(self.equiped))
                 continue
 
@@ -219,6 +225,29 @@ class Dungeon:
                         print(str(i+1) + " " + x[1] +": "+ x[3] + ", damage: " + str(x[2]))
                 continue
 
+            elif words[0] == 'equip':
+                if len(words) < 2:
+                    print("usage: equip <item>")
+                    continue
+                self.c.execute('SELECT * from item WHERE name="{}" and owner="{}"'.format(words[1],self.user))
+                x = self.c.fetchall()
+                if len(x) == 0:
+                    print(RED + "not a valid item" + RESET)
+                    continue
+                elif len(x) > 1:
+                    for j,i in enumerate(x):
+                        print("{} | {} | {} damage".format(j,i[1],i[2]))
+                    try:
+                        index = int(input("pick one: "))
+                        self.attack = x[index][2]
+                    except:
+                        print(RED + "not a valid index" + RESET)
+                        continue
+                else:
+                    self.attack = x[0][2]
+                print("Your attack is " + color_attack(self.attack) + str(self.attack) + RESET)
+                self.update_usr()
+
             elif words[0] == 'take':
                 self.c.execute('SELECT * FROM item WHERE room_id={}'.format(self.current_room))
                 item = self.c.fetchall()
@@ -229,11 +258,8 @@ class Dungeon:
                     for x in item:
                         if words[1] == x[1]:
                             self.items.append(x[1])
-                            if x[2] > self.attack:
-                                self.attack = x[2]
-                                print("Your attack is now {}".format(self.attack))
-                            self.c.execute('UPDATE item SET owner="{}" WHERE room_id={}'.format(self.user,self.current_room))
-                            self.c.execute('UPDATE item SET room_id=-1 WHERE owner="{}"'.format(self.user))
+                            self.c.execute('UPDATE item SET owner="{}" WHERE room_id={} AND name="{}"'.format(self.user,self.current_room,x[1]))
+                            self.c.execute('UPDATE item SET room_id=-1 WHERE owner="{}" AND name="{}"'.format(self.user,x[1]))
                             self.db.commit()
                             break
 
@@ -313,7 +339,7 @@ class Dungeon:
         self.items = []  # base player inventory is empty
         self.c.execute("SELECT MIN(id) FROM rooms")
         self.current_room = self.c.fetchone()[0]
-        self.c.execute('INSERT INTO user (username, password, health, room_id, super, status) VALUES ("{}","{}",{},{},{},"{}")'.format(self.user,b64encode(psw.encode("utf-8")),self.health,1,int(self.super),"online"))
+        self.c.execute('INSERT INTO user (username, password, health, attack, room_id, super, status) VALUES ("{}","{}",{},{},{},{},"{}")'.format(self.user,b64encode(psw.encode("utf-8")),self.health,self.attack,1,int(self.super),"online"))
         self.db.commit()
 
     def authenticate(self):
@@ -324,28 +350,24 @@ class Dungeon:
             print("Incorrect password for user")
             self.login()
             return None
-        if correct[4] == 1:
+        if correct[5] == 1:
             self.prompt =  RED + self.user + " ! "+RESET
             self.super = True
         else:
             self.prompt = self.user + ' > '
             self.super = False
-        self.current_room = correct[3]
+        self.current_room = correct[4]
         self.health = correct[2]  # base player health
         self.items = []  # base player inventory
-        self.attack = 5 # base attack
+        self.attack = correct[3] # base attack
         self.c.execute('SELECT name FROM item WHERE owner = "{}"'.format(self.user))
         for item in self.c.fetchall():
             self.items.append(item[0])
-            self.c.execute('SELECT damage FROM item WHERE name="{}" AND owner="{}"'.format(item[0],self.user))
-            damage = self.c.fetchone()
-            if damage is not None:
-                self.attack = max(self.attack,damage[0]) # updates attack value to best item
         self.c.execute('UPDATE user SET status="online" WHERE username="{}"'.format(self.user))
         self.db.commit()
 
     def saveuser(self):
-        self.c.execute('UPDATE user SET health={}, super={}, room_id={}, status="offline" WHERE username="{}"'.format(self.health,int(self.super),self.current_room,self.user))
+        self.c.execute('UPDATE user SET health={}, super={}, attack={}, room_id={}, status="offline" WHERE username="{}"'.format(self.health,int(self.super),self.attack,self.current_room,self.user))
         self.db.commit()
         print("Saved")
         self.db.close()
@@ -357,7 +379,7 @@ class Dungeon:
         self.c.execute("CREATE TABLE loot (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, min INTEGER, max INTEGER, desc TEXT)") # items have range of damage
         self.c.execute("CREATE TABLE item (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, damage INTEGER, desc TEXT, room_id INTEGER, owner TEXT)") # specific items have damage value
         self.c.execute("CREATE TABLE exits (from_room INTEGER, to_room INTEGER, dir TEXT)")
-        self.c.execute("CREATE TABLE user (username TEXT, password TEXT, health INTEGER, room_id INTEGER, super INTEGER, status TEXT)")
+        self.c.execute("CREATE TABLE user (username TEXT, password TEXT, health INTEGER, attack INTEGER, room_id INTEGER, super INTEGER, status TEXT)")
         self.c.execute("INSERT INTO rooms (florid_desc, short_desc) VALUES ('You are standing at the entrance of what appears to be a vast, complex cave.', 'entrance')")
         self.db.commit()
 
