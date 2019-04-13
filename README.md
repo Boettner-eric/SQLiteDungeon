@@ -32,6 +32,7 @@ On the way:
 - Multiplayer support (chat, interactions, fights?)
 - Better stats (defense, chance, magic...)
 - Automatic random dungeon generation
+- Fix bug when dropping up taking duplicate items (currently just does command for both)
 - Many bug fixes
 
 Enjoy!

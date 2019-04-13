@@ -151,6 +151,20 @@ class Dungeon:
                                     print(item[1] + ": " + item[3] + ", damage: " + str(item[2]))
                 continue
 
+            elif words[0] == 'drop':
+                if len(words) < 2:
+                    print("usage: drop <item name>")
+                    continue
+                if words[1] in self.items:
+                    self.c.execute('UPDATE item SET owner="",room_id={} WHERE owner="{}" AND name="{}"'.format(self.current_room, self.user, words[1]))
+                    self.db.commit()
+                    self.update_usr()
+                    while words[1] in self.items:
+                        self.items.remove(words[1])
+                        print("You dropped your {}".format(words[1]))
+                    continue
+                else:
+                    print(RED + "Not a valid item" + RESET)
             elif words[0] == 'attack':
                 self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
                 mob = self.c.fetchone()
@@ -201,7 +215,8 @@ class Dungeon:
                 for i, item in enumerate(self.items):
                     self.c.execute('SELECT * from item WHERE name="{}" and owner="{}"'.format(item,self.user))
                     x = self.c.fetchone()
-                    print(str(i+1) + " " + x[1] +": "+ x[3] + ", damage: " + str(x[2]))
+                    if x is not None:
+                        print(str(i+1) + " " + x[1] +": "+ x[3] + ", damage: " + str(x[2]))
                 continue
 
             elif words[0] == 'take':
