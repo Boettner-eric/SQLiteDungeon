@@ -19,6 +19,7 @@ help = {'loot':'<name> <min> <max> | <desc>','spawn':'<name> <hp> <item>','vanis
 type = lambda x: "damage" if x>0 else "hp"
 error = lambda msg: print(YELLOW + msg + RESET)
 event = lambda msg: print(BLUE + msg + RESET)
+bad = lambda msg: print(RED + msg + RESET)
 
 color_health = lambda x: GREEN if x > 50 else YELLOW if x > 25 else RED
 color_attack = lambda x: GREEN if x < 50 else YELLOW if x < 25 else RED
@@ -61,7 +62,7 @@ class Dungeon:
                 self.c.execute('SELECT damage FROM item WHERE owner="{}"'.format(mob[1]))
                 damage = self.c.fetchone()
                 if damage is not None:
-                    print(mob[1] + " attacked you! You lost " + str(damage[0])+ " health")
+                    bad(mob[1] + " attacked you! You lost " + str(damage[0])+ " health")
                     self.health -= damage[0]
                     self.update_usr()
                 else:
@@ -69,7 +70,7 @@ class Dungeon:
 
     def is_dead(self):
         if self.health <= 0:
-            error("you died...")
+            bad("you died...")
             print("you seemed to have lost your items and ended up back at the entrance")
             self.health = 100
             self.attack = 5
@@ -183,7 +184,7 @@ class Dungeon:
                 else:
                     if randrange(200) < 180: # todo: more player/mob stats
                         if mob[2] <= self.attack:
-                            self.c.execute("DELETE FROM mobs WHERE room_id={}".format(self.current_room))
+                            self.c.execute('DELETE FROM mobs WHERE room_id={} AND desc="{}"'.format(self.current_room, words[1]))
                             print("You killed {}!".format(mob[1]))
                             self.c.execute('SELECT name FROM item WHERE owner="{}"'.format(mob[1]))
                             item = self.c.fetchone()
