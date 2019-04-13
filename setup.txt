@@ -8,7 +8,10 @@ loot spear 15 35 | Sharp
 loot lance 20 50 | Kinda like a spear
 loot axe 10 35 | A heavy but blunt weapon
 loot knife 3  10 | Useful for chopping
+loot potion -20 -1 | Healing elixir
+place potion
 place spear
+place
 dig east west | A small room | Pretty Normal
 dig up down | The Kitchen | It smells pretty good...
 east
