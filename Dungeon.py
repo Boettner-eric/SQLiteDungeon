@@ -163,13 +163,25 @@ class Dungeon:
                     print("usage: drop {}".format(help[words[0]]))
                     continue
                 if words[1] in self.items:
-                    self.c.execute('UPDATE item SET owner="",room_id={} WHERE owner="{}" AND name="{}"'.format(self.current_room, self.user, words[1]))
-                    self.db.commit()
+                    self.c.execute('SELECT * from item WHERE name="{}" and owner="{}"'.format(words[1],self.user))
+                    x = self.c.fetchall()
+                    if len(x) == 0:
+                        error("not a valid item")
+                        continue
+                    elif len(x) > 1:
+                        for j,i in enumerate(x):
+                            print("{} | {} | {} {}".format(j,i[1] ,abs(i[2]),"damage" if words[0]=='equip' else 'hp'))
+                        try:
+                            index = int(input("pick one: "))
+                        except:
+                            error("not a valid index")
+                            continue
+                    else:
+                        index = 0
+                    self.items.remove(words[1])
+                    print("You dropped your {}".format(words[1]))
+                    self.place(words[1],self.user)
                     self.update_usr()
-                    while words[1] in self.items:
-                        self.items.remove(words[1])
-                        print("You dropped your {}".format(words[1]))
-                    continue
                 else:
                     error("Not a valid item")
 
@@ -259,7 +271,6 @@ class Dungeon:
                     error("Can't {} that: try '{}'".format(words[0], words[0] and 'equip'))
                     continue
 
-
             elif words[0] == 'take':
                 self.c.execute('SELECT * FROM item WHERE room_id={}'.format(self.current_room))
                 item = self.c.fetchall()
@@ -268,7 +279,7 @@ class Dungeon:
                     continue
                 if item != []:
                     for x in item:
-                        if words[1] == x[1]:
+                        if words[1] == x[1] or words[1] == "all":
                             self.items.append(x[1])
                             self.c.execute('UPDATE item SET owner="{}" WHERE room_id={} AND name="{}"'.format(self.user,self.current_room,x[1]))
                             self.c.execute('UPDATE item SET room_id=-1 WHERE owner="{}" AND name="{}"'.format(self.user,x[1]))
@@ -301,7 +312,7 @@ class Dungeon:
             damage = randrange(item[2],item[3]) # takes damage from range instead of int
             self.c.execute('INSERT INTO item (name, damage, desc, room_id) VALUES ("{}",{},"{}",{})'.format(name,damage,item[4], self.current_room))
         else:
-            self.c.execute("UPDATE item SET room_id='{}', owner='{}' WHERE owner='{}'".format(self.current_room,"",owner))
+            self.c.execute("UPDATE item SET room_id='{}', owner='{}' WHERE owner='{}' AND name='{}'".format(self.current_room,"",owner,name))
         self.db.commit()
 
     # describe this room and its exits
