@@ -29,5 +29,10 @@ up
 spawn chef 10 knife
 tele 1
 dig south north | A small room | Empty
+south
+place potion
+dig south north | The Throne Room | Be careful...
+south
+spawn Bodygaurd 100 lance
 tele 1
 exit

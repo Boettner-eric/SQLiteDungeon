@@ -118,7 +118,9 @@ class Dungeon:
                     continue
                 else:
                     self.current_room = new_room_p[0]
-                    self.visited.append(self.current_room)
+                    self.c.execute("SELECT * FROM rooms WHERE id={}".format(self.current_room))
+                    room = self.c.fetchone()
+                    self.visited.append(room)
                     self.doLook()
                     self.update_usr()
 
@@ -245,7 +247,7 @@ class Dungeon:
                     continue
                 self.c.execute('SELECT * from item WHERE name="{}" and owner="{}"'.format(words[1],self.user))
                 x = self.c.fetchall()
-                if len(x) == 0:
+                if len(x) == 0 or x is None:
                     error("not a valid item")
                     continue
                 elif len(x) > 1:
@@ -297,15 +299,13 @@ class Dungeon:
                 for j in NORMAL_COMMANDS:
                     print("{0: <8}".format(j) + " | "+ '{}'.format(help[j]))
                 continue
+
             elif words[0] == 'map':
                 if self.super:
                     self.c.execute('SELECT * FROM rooms')
                     x = self.c.fetchall()
                 else: # shows map of visited rooms
-                    x = []
-                    for i in self.visited:
-                        self.c.execute('SELECT * FROM rooms WHERE id={}'.format(i))
-                        x += self.c.fetchall()
+                    x = self.visited
                 print("id| Description | Long Description |")
                 for i in x:
                     print("{} | {} | {}|".format(i[0], i[1], i[2]))
@@ -330,10 +330,10 @@ class Dungeon:
 
     # describe this room and its exits
     def doLook(self):
-        self.c.execute("SELECT short_desc FROM rooms WHERE id={}".format(self.current_room))
-        print(self.c.fetchone()[0])
-        self.c.execute("SELECT florid_desc FROM rooms WHERE id={}".format(self.current_room))
-        print(self.c.fetchone()[0])
+        self.c.execute("SELECT * FROM rooms WHERE id={}".format(self.current_room))
+        room = self.c.fetchone()
+        print(room[1])
+        print(room[2])
         self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
         mobs = self.c.fetchall()
         if mobs != None and mobs != []:
