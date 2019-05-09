@@ -54,6 +54,10 @@ class Dungeon:
         self.c.execute('UPDATE user SET health={}, attack={}, room_id={}, super={} WHERE username="{}"'.format(self.health, self.attack, self.current_room, int(self.super), self.user))
         self.db.commit()
 
+    def logout(self):
+        self.c.execute('UPDATE user SET status="offline" WHERE username="{}"'.format(self.user))
+        self.db.commit()
+
     def combat(self):
         self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
         mobs = self.c.fetchall() # todo: have multiple mobs at once
@@ -91,6 +95,7 @@ class Dungeon:
                 continue
             elif words[0] in ('exit', 'quit', 'q'):
                 self.update_usr()
+                self.logout()
                 print("Saved")
                 self.db.close()
                 break
