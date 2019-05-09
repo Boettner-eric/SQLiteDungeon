@@ -12,8 +12,8 @@ PURPLE = '\033[95m'
 RESET = '\033[0m'
 
 DIRECTIONS = ['east', 'west', 'north', 'south', 'up', 'down']
-SUPER_COMMANDS = ['loot','spawn','vanish','dig','place','tele','map','table']
-NORMAL_COMMANDS = ['use', 'look', 'go', 'super', 'normal', 'inspect', 'equip', 'drop', 'attack', 'list', 'stats', 'items']
+SUPER_COMMANDS = ['loot','spawn','vanish','dig','place','tele','table']
+NORMAL_COMMANDS = ['map','use', 'look', 'go', 'super', 'normal', 'inspect', 'equip', 'drop', 'attack', 'list', 'stats', 'items']
 help = {'loot':'<name> <min> <max> | <desc>','spawn':'<name> <hp> <item>','vanish':'', 'dig':'<dir> <rev> | <name> | <description>','place':'<item>','tele':'<room_id>','map':'','table':'<table name>', 'look':'','go':'<dir> | <dir>','super':'<passcode>','normal':'','inspect':'<item>','equip':'<item>','drop':'<item>','attack':'<mob> | <player> ','list':'','stats':'','items':'','use':'<item>'}
 
 type = lambda x: "damage" if x>0 else "hp"
@@ -54,6 +54,10 @@ class Dungeon:
         self.c.execute('UPDATE user SET health={}, attack={}, room_id={}, super={} WHERE username="{}"'.format(self.health, self.attack, self.current_room, int(self.super), self.user))
         self.db.commit()
 
+    def logout(self):
+        self.c.execute('UPDATE user SET status="offline" WHERE username="{}"'.format(self.user))
+        self.db.commit()
+
     def combat(self):
         self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
         mobs = self.c.fetchall() # todo: have multiple mobs at once
@@ -91,6 +95,7 @@ class Dungeon:
                 continue
             elif words[0] in ('exit', 'quit', 'q'):
                 self.update_usr()
+                self.logout()
                 print("Saved")
                 self.db.close()
                 break
@@ -118,7 +123,9 @@ class Dungeon:
                     continue
                 else:
                     self.current_room = new_room_p[0]
-                    self.visited.append(self.current_room)
+                    self.c.execute("SELECT * FROM rooms WHERE id={}".format(self.current_room))
+                    room = self.c.fetchone()
+                    self.visited.append(room)
                     self.doLook()
                     self.update_usr()
 
@@ -183,7 +190,8 @@ class Dungeon:
                     self.place(words[1],self.user)
                     self.update_usr()
                 else:
-                    error("Not a valid item")
+                    error("not a valid item")
+                    continue
 
             elif words[0] == 'attack':
                 if len(words) < 2:
@@ -193,6 +201,7 @@ class Dungeon:
                 mob = self.c.fetchone() # if two mobs have the same name attack just one
                 if mob is None:
                     error("Not a valid mob")
+                    continue
                 else:
                     if randrange(200) < 180: # todo: more player/mob stats
                         if mob[2] <= self.attack:
@@ -233,7 +242,7 @@ class Dungeon:
                     x = self.c.fetchall()
                     if x is not None:
                         for p in x:
-                            print("{}, {} | {} {}".format(p[1],p[3],abs(p[2]),type(p[2])))
+                            print("{} | {} | {} {}".format(p[1],p[3],abs(p[2]),type(p[2])))
                 continue
 
 
@@ -243,7 +252,7 @@ class Dungeon:
                     continue
                 self.c.execute('SELECT * from item WHERE name="{}" and owner="{}"'.format(words[1],self.user))
                 x = self.c.fetchall()
-                if len(x) == 0:
+                if len(x) == 0 or x is None:
                     error("not a valid item")
                     continue
                 elif len(x) > 1:
@@ -268,7 +277,7 @@ class Dungeon:
                     self.c.execute('DELETE FROM item WHERE owner="{}" AND name="{}" AND damage={}'.format(self.user, words[1],x[index][2]))
                     self.db.commit()
                 else:
-                    error("Can't {} that: try '{}'".format(words[0], words[0] and 'equip'))
+                    error("can't {} that: try '{}'".format(words[0], words[0] and 'equip'))
                     continue
 
             elif words[0] == 'take':
@@ -296,8 +305,17 @@ class Dungeon:
                     print("{0: <8}".format(j) + " | "+ '{}'.format(help[j]))
                 continue
 
+            elif words[0] == 'map':
+                if self.super:
+                    self.c.execute('SELECT * FROM rooms')
+                    x = self.c.fetchall()
+                else: # shows map of visited rooms
+                    x = self.visited
+                print("id| Description | Long Description |")
+                for i in x:
+                    print("{} | {} | {}|".format(i[0], i[1], i[2]))
             else:
-                print("unknown command {}".format(words[0]))
+                error("unknown command {}".format(words[0]))
                 continue
 
             if not self.super:
@@ -317,10 +335,10 @@ class Dungeon:
 
     # describe this room and its exits
     def doLook(self):
-        self.c.execute("SELECT short_desc FROM rooms WHERE id={}".format(self.current_room))
-        print(self.c.fetchone()[0])
-        self.c.execute("SELECT florid_desc FROM rooms WHERE id={}".format(self.current_room))
-        print(self.c.fetchone()[0])
+        self.c.execute("SELECT * FROM rooms WHERE id={}".format(self.current_room))
+        room = self.c.fetchone()
+        print(room[1])
+        print(room[2])
         self.c.execute("SELECT * FROM mobs WHERE room_id={}".format(self.current_room))
         mobs = self.c.fetchall()
         if mobs != None and mobs != []:
@@ -463,15 +481,8 @@ class Dungeon:
                 self.doLook()
                 self.update_usr()
             else:
-                print("Not a valid id")
+                error("not a valid id")
                 return
-
-        elif words[0] == 'map':
-            self.c.execute('SELECT * FROM rooms')
-            x = self.c.fetchall()
-            print("id| Description | Long Description |")
-            for i in x:
-                print("{} | {} | {}|".format(i[0], i[1], i[2]))
 
         elif words[0] == 'vanish':
             query = "DELETE FROM mobs WHERE room_id={}".format(self.current_room) # deletes all mobs in current room
