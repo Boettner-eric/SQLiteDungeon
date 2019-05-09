@@ -21,7 +21,7 @@ error = lambda msg: print(YELLOW + msg + RESET)
 event = lambda msg: print(BLUE + msg + RESET)
 bad = lambda msg: print(RED + msg + RESET)
 
-color_health = lambda x: GREEN if x > 50 else YELLOW if x > 25 else RED
+color_health = lambda x,y: PURPLE + '{0: <5}'.format('∞') + RESET if y else GREEN + '{0: <5}'.format(x) + RESET if x > 50 else YELLOW  + '{0: <5}'.format(x) + RESET if x > 25 else RED + '{0: <5}'.format(x) + RESET
 color_attack = lambda x: GREEN if x < 50 else YELLOW if x < 25 else RED
 
 class Dungeon:
@@ -226,12 +226,12 @@ class Dungeon:
                 print("name     | hp    | dmg | room | status  |" if self.super else "name     | status  |")
                 for i in self.c.fetchall():
                     if self.super:
-                        print(super(i[5],'{0: <8}'.format(i[0])) + " | " + color_health(i[2])+ '{0: <5}'.format(i[2]) + RESET + " | " + color_attack(i[3]) + '{0:<3}'.format(i[3]) + RESET + " | " + '{0: <4}'.format(i[4]) + " | " + online('{0: <7}'.format(i[6])) + " |") # fix formatting here for names
+                        print(super(i[5],'{0: <8}'.format(i[0])) + " | " + color_health(i[2],i[5]) +  " | " + color_attack(i[3]) + '{0:<3}'.format(i[3]) + RESET + " | " + '{0: <4}'.format(i[4]) + " | " + online('{0: <7}'.format(i[6])) + " |") # fix formatting here for names
                     else:
                         print(super(i[5],'{0: <8}'.format(i[0]))+ " | " + online('{0: <7}'.format(i[6])) + " |") # fix formatting here for names
 
             elif words[0] == 'stats':
-                print("You have " + color_health(self.health) + str(self.health) + RESET + " health")
+                print("You have " + color_health(self.health,self.super) +  " health")
                 print("Your attack is " + color_attack(self.attack) + str(self.attack) + RESET)
                 print("You have {} items".format(len(self.items)))
                 continue
